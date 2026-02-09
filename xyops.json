@@ -21,7 +21,7 @@
 						"type": "toolset",
 						"caption": "Select a tool from the toolbox.",
 						"locked": false,
-						"value": {
+						"data": {
 							"tools": [
 								{
 									"id": "tokenGenerator",
@@ -32,7 +32,7 @@
 											"id": "tokenLength",
 											"title": "Length",
 											"type": "text",
-											"value": "64",
+											"value": 64,
 											"variant": "number",
 											"caption": "The length of the generated token (1-1024)."
 										},
@@ -59,16 +59,16 @@
 										},
 										{
 											"id": "includeSymbols",
-											"title": "Include Symbols (!@#...)",
+											"title": "Include Symbols",
 											"type": "checkbox",
 											"value": false,
-											"caption": "Include special symbols !@#$%^&*()_+-=[]{}|;:,.<>? in the token."
+											"caption": "Include special symbols !()_+-=[]{}|;:,.? in the token."
 										},
 										{
 											"id": "tokenCount",
 											"title": "Number of Tokens",
 											"type": "text",
-											"value": "1",
+											"value": 1,
 											"variant": "number",
 											"caption": "How many tokens to generate (1-100)."
 										}
@@ -97,9 +97,30 @@
 											"id": "uuidCount",
 											"title": "Number of UUIDs",
 											"type": "text",
-											"value": "1",
+											"value": 1,
 											"variant": "number",
 											"caption": "How many UUIDs to generate (1-100)."
+										}
+									]
+								},
+								{
+									"id": "hashText",
+									"title": "Hash Text",
+									"description": "Hash a text string using multiple algorithms: MD5, SHA1, SHA256, SHA224, SHA512, SHA384, SHA3, RIPEMD160.",
+									"fields": [
+										{
+											"id": "hashInput",
+											"title": "Text to Hash",
+											"type": "textarea",
+											"value": "",
+											"caption": "Enter the text string you want to hash."
+										},
+										{
+											"id": "hashEncoding",
+											"title": "Digest Encoding",
+											"type": "select",
+											"value": "Hexadecimal (base 16) [hex], Base64 [base64], Binary (raw) [binary]",
+											"caption": "Select the output encoding for the hash digests."
 										}
 									]
 								}

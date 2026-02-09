@@ -338,6 +338,77 @@ function runUUIDGenerator(params) {
 }
 
 // ============================================
+// HASH TEXT
+// ============================================
+
+const HASH_ALGORITHMS = [
+	{ id: 'md5', name: 'MD5', algorithm: 'md5' },
+	{ id: 'sha1', name: 'SHA1', algorithm: 'sha1' },
+	{ id: 'sha256', name: 'SHA256', algorithm: 'sha256' },
+	{ id: 'sha224', name: 'SHA224', algorithm: 'sha224' },
+	{ id: 'sha512', name: 'SHA512', algorithm: 'sha512' },
+	{ id: 'sha384', name: 'SHA384', algorithm: 'sha384' },
+	{ id: 'sha3', name: 'SHA3', algorithm: 'sha3-256' },
+	{ id: 'ripemd160', name: 'RIPEMD160', algorithm: 'ripemd160' }
+];
+
+function computeHash(text, algorithm, encoding) {
+	try {
+		return crypto.createHash(algorithm).update(text, 'utf8').digest(encoding);
+	} catch (err) {
+		return `[Not supported: ${err.message}]`;
+	}
+}
+
+function runHashText(params) {
+	progress(0.1, 'Validating parameters...');
+	
+	const text = params.hashInput || '';
+	const encoding = params.hashEncoding || 'hex';
+	
+	progress(0.2, 'Computing hashes...');
+	
+	const hashes = {};
+	const rows = [];
+	
+	for (let i = 0; i < HASH_ALGORITHMS.length; i++) {
+		const algo = HASH_ALGORITHMS[i];
+		const hash = computeHash(text, algo.algorithm, encoding);
+		hashes[algo.id] = hash;
+		rows.push([algo.name, hash]);
+		progress(0.2 + (0.7 * (i + 1) / HASH_ALGORITHMS.length), `Computed ${algo.name}...`);
+	}
+	
+	progress(0.95, 'Finalizing...');
+	
+	const encodingNames = {
+		hex: 'Hexadecimal (base 16)',
+		base64: 'Base64',
+		binary: 'Binary (raw)'
+	};
+	
+	const result = {
+		tool: 'Hash Text',
+		inputLength: text.length,
+		encoding: encoding,
+		encodingName: encodingNames[encoding],
+		hashes: hashes
+	};
+	
+	// Output table for UI
+	output({
+		table: {
+			title: 'Hash Results',
+			header: ['Algorithm', 'Hash'],
+			rows: rows,
+			caption: `Hashed ${text.length} character(s) using ${encodingNames[encoding]} encoding`
+		}
+	});
+	
+	return result;
+}
+
+// ============================================
 // MAIN
 // ============================================
 
@@ -355,6 +426,9 @@ async function main() {
 				break;
 			case 'uuidGenerator':
 				result = runUUIDGenerator(params);
+				break;
+			case 'hashText':
+				result = runHashText(params);
 				break;
 			default:
 				throw new Error(`Unknown tool: ${tool}`);
