@@ -260,6 +260,34 @@
 											"caption": "Maximum width in characters (40-200)."
 										}
 									]
+								},
+								{
+									"id": "ibanValidator",
+									"title": "IBAN Validator",
+									"description": "Validate IBAN (International Bank Account Number) and extract country, check digits, and BBAN.",
+									"fields": [
+										{
+											"id": "ibanSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the IBAN from."
+										},
+										{
+											"id": "ibanInput",
+											"title": "IBAN",
+											"type": "text",
+											"value": "",
+											"caption": "Enter the IBAN to validate (spaces are allowed)."
+										},
+										{
+											"id": "ibanDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
 								}
 							]
 						}

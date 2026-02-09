@@ -547,6 +547,179 @@ async function runQRCode(params, jobInput, cwd) {
 }
 
 // ============================================
+// IBAN VALIDATOR
+// ============================================
+
+// IBAN country codes and their expected lengths
+const IBAN_LENGTHS = {
+	AL: 28, AD: 24, AT: 20, AZ: 28, BH: 22, BY: 28, BE: 16, BA: 20, BR: 29,
+	BG: 22, CR: 22, HR: 21, CY: 28, CZ: 24, DK: 18, DO: 28, TL: 23, EE: 20,
+	EG: 29, SV: 28, FO: 18, FI: 18, FR: 27, GE: 22, DE: 22, GI: 23, GR: 27,
+	GL: 18, GT: 28, HU: 28, IS: 26, IQ: 23, IE: 22, IL: 23, IT: 27, JO: 30,
+	KZ: 20, XK: 20, KW: 30, LV: 21, LB: 28, LY: 25, LI: 21, LT: 20, LU: 20,
+	MK: 19, MT: 31, MR: 27, MU: 30, MC: 27, MD: 24, ME: 22, NL: 18, NO: 15,
+	PK: 24, PS: 29, PL: 28, PT: 25, QA: 29, RO: 24, LC: 32, SM: 27, ST: 25,
+	SA: 24, RS: 22, SC: 31, SK: 24, SI: 19, ES: 24, SD: 18, SE: 24, CH: 21,
+	TN: 24, TR: 26, UA: 29, AE: 23, GB: 22, VA: 22, VG: 24
+};
+
+const COUNTRY_NAMES = {
+	AL: 'Albania', AD: 'Andorra', AT: 'Austria', AZ: 'Azerbaijan', BH: 'Bahrain',
+	BY: 'Belarus', BE: 'Belgium', BA: 'Bosnia and Herzegovina', BR: 'Brazil',
+	BG: 'Bulgaria', CR: 'Costa Rica', HR: 'Croatia', CY: 'Cyprus', CZ: 'Czech Republic',
+	DK: 'Denmark', DO: 'Dominican Republic', TL: 'East Timor', EE: 'Estonia',
+	EG: 'Egypt', SV: 'El Salvador', FO: 'Faroe Islands', FI: 'Finland', FR: 'France',
+	GE: 'Georgia', DE: 'Germany', GI: 'Gibraltar', GR: 'Greece', GL: 'Greenland',
+	GT: 'Guatemala', HU: 'Hungary', IS: 'Iceland', IQ: 'Iraq', IE: 'Ireland',
+	IL: 'Israel', IT: 'Italy', JO: 'Jordan', KZ: 'Kazakhstan', XK: 'Kosovo',
+	KW: 'Kuwait', LV: 'Latvia', LB: 'Lebanon', LY: 'Libya', LI: 'Liechtenstein',
+	LT: 'Lithuania', LU: 'Luxembourg', MK: 'North Macedonia', MT: 'Malta',
+	MR: 'Mauritania', MU: 'Mauritius', MC: 'Monaco', MD: 'Moldova', ME: 'Montenegro',
+	NL: 'Netherlands', NO: 'Norway', PK: 'Pakistan', PS: 'Palestine', PL: 'Poland',
+	PT: 'Portugal', QA: 'Qatar', RO: 'Romania', LC: 'Saint Lucia', SM: 'San Marino',
+	ST: 'Sao Tome and Principe', SA: 'Saudi Arabia', RS: 'Serbia', SC: 'Seychelles',
+	SK: 'Slovakia', SI: 'Slovenia', ES: 'Spain', SD: 'Sudan', SE: 'Sweden',
+	CH: 'Switzerland', TN: 'Tunisia', TR: 'Turkey', UA: 'Ukraine',
+	AE: 'United Arab Emirates', GB: 'United Kingdom', VA: 'Vatican City',
+	VG: 'British Virgin Islands'
+};
+
+function validateIBAN(iban) {
+	// Remove spaces and convert to uppercase
+	const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+	
+	// Check basic format (letters and digits only)
+	if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]+$/.test(cleanIban)) {
+		return { valid: false, error: 'Invalid IBAN format. Must start with 2 letters, 2 digits, then alphanumeric characters.' };
+	}
+	
+	const countryCode = cleanIban.substring(0, 2);
+	const checkDigits = cleanIban.substring(2, 4);
+	const bban = cleanIban.substring(4);
+	
+	// Check country code
+	if (!IBAN_LENGTHS[countryCode]) {
+		return { valid: false, error: `Unknown country code: ${countryCode}` };
+	}
+	
+	// Check length
+	const expectedLength = IBAN_LENGTHS[countryCode];
+	if (cleanIban.length !== expectedLength) {
+		return { 
+			valid: false, 
+			error: `Invalid length for ${countryCode}. Expected ${expectedLength} characters, got ${cleanIban.length}.` 
+		};
+	}
+	
+	// Validate check digits using MOD-97 algorithm
+	// Move first 4 chars to end, replace letters with numbers (A=10, B=11, etc.)
+	const rearranged = cleanIban.substring(4) + cleanIban.substring(0, 4);
+	let numericString = '';
+	for (const char of rearranged) {
+		if (/[0-9]/.test(char)) {
+			numericString += char;
+		} else {
+			numericString += (char.charCodeAt(0) - 55).toString(); // A=10, B=11, etc.
+		}
+	}
+	
+	// Calculate MOD 97 using string-based division (for large numbers)
+	let remainder = 0;
+	for (const digit of numericString) {
+		remainder = (remainder * 10 + parseInt(digit)) % 97;
+	}
+	
+	if (remainder !== 1) {
+		return { valid: false, error: 'Invalid check digits. The IBAN checksum verification failed.' };
+	}
+	
+	// Format IBAN with spaces (groups of 4)
+	const formatted = cleanIban.match(/.{1,4}/g).join(' ');
+	
+	return {
+		valid: true,
+		iban: cleanIban,
+		formatted: formatted,
+		countryCode: countryCode,
+		countryName: COUNTRY_NAMES[countryCode] || countryCode,
+		checkDigits: checkDigits,
+		bban: bban,
+		length: cleanIban.length
+	};
+}
+
+function runIbanValidator(params, jobInput) {
+	progress(0.1, 'Validating parameters...');
+	
+	const source = params.ibanSource || 'field';
+	let iban = '';
+	
+	if (source === 'input') {
+		const inputData = jobInput?.data;
+		if (!inputData) {
+			throw new Error('No input data available from previous job');
+		}
+		const dataPath = params.ibanDataPath || '';
+		const value = getNestedValue(inputData, dataPath);
+		if (value === undefined) {
+			throw new Error(`Data path '${dataPath}' not found in input data`);
+		}
+		iban = String(value);
+	} else {
+		iban = params.ibanInput || '';
+	}
+	
+	if (!iban) {
+		throw new Error('No IBAN provided');
+	}
+	
+	progress(0.5, 'Validating IBAN...');
+	
+	const validation = validateIBAN(iban);
+	
+	progress(0.95, 'Finalizing...');
+	
+	const result = {
+		tool: 'IBAN Validator',
+		input: iban,
+		...validation
+	};
+	
+	if (validation.valid) {
+		output({
+			table: {
+				title: 'IBAN Validation Result',
+				header: ['Property', 'Value'],
+				rows: [
+					['Status', '✓ Valid IBAN'],
+					['Formatted', validation.formatted],
+					['Country', `${validation.countryName} (${validation.countryCode})`],
+					['Check Digits', validation.checkDigits],
+					['BBAN', validation.bban],
+					['Length', `${validation.length} characters`]
+				],
+				caption: 'IBAN is valid and passes MOD-97 checksum verification'
+			}
+		});
+	} else {
+		output({
+			table: {
+				title: 'IBAN Validation Result',
+				header: ['Property', 'Value'],
+				rows: [
+					['Status', '✗ Invalid IBAN'],
+					['Input', iban],
+					['Error', validation.error]
+				],
+				caption: 'IBAN validation failed'
+			}
+		});
+	}
+	
+	return result;
+}
+
+// ============================================
 // ASCII ART GENERATOR
 // ============================================
 
@@ -663,6 +836,9 @@ async function main() {
 				break;
 		case 'asciiArt':
 				result = await runAsciiArt(params, job.input, cwd);
+				break;
+			case 'ibanValidator':
+				result = runIbanValidator(params, job.input);
 				break;
 			default:
 				throw new Error(`Unknown tool: ${tool}`);
