@@ -1,0 +1,117 @@
+{
+	"type": "xypdf",
+	"description": "xyOps Portable Data Object",
+	"version": "1.0",
+	"items": [
+		{
+			"type": "plugin",
+			"data": {
+				"id": "tbx1toolbox0001",
+				"title": "Toolbox",
+				"enabled": true,
+				"type": "event",
+				"command": "npx -y github:talder/xkops-toolbox#v1.0.0",
+				"script": "",
+				"groups": [],
+				"format": "",
+				"params": [
+					{
+						"id": "tool",
+						"title": "Tool",
+						"type": "toolset",
+						"caption": "Select a tool from the toolbox.",
+						"locked": false,
+						"value": {
+							"tools": [
+								{
+									"id": "tokenGenerator",
+									"title": "Token Generator",
+									"description": "Generate random tokens/strings with customizable character sets and length.",
+									"fields": [
+										{
+											"id": "tokenLength",
+											"title": "Length",
+											"type": "text",
+											"value": "64",
+											"variant": "number",
+											"caption": "The length of the generated token (1-1024)."
+										},
+										{
+											"id": "includeUppercase",
+											"title": "Include Uppercase (ABC...)",
+											"type": "checkbox",
+											"value": true,
+											"caption": "Include uppercase letters A-Z in the token."
+										},
+										{
+											"id": "includeLowercase",
+											"title": "Include Lowercase (abc...)",
+											"type": "checkbox",
+											"value": true,
+											"caption": "Include lowercase letters a-z in the token."
+										},
+										{
+											"id": "includeNumbers",
+											"title": "Include Numbers (123...)",
+											"type": "checkbox",
+											"value": true,
+											"caption": "Include digits 0-9 in the token."
+										},
+										{
+											"id": "includeSymbols",
+											"title": "Include Symbols (!@#...)",
+											"type": "checkbox",
+											"value": false,
+											"caption": "Include special symbols !@#$%^&*()_+-=[]{}|;:,.<>? in the token."
+										},
+										{
+											"id": "tokenCount",
+											"title": "Number of Tokens",
+											"type": "text",
+											"value": "1",
+											"variant": "number",
+											"caption": "How many tokens to generate (1-100)."
+										}
+									]
+								},
+								{
+									"id": "uuidGenerator",
+									"title": "UUID Generator",
+									"description": "Generate Universally Unique Identifiers (UUIDs) in various versions.",
+									"fields": [
+										{
+											"id": "uuidVersion",
+											"title": "UUID Version",
+											"type": "select",
+											"value": "v1 - Time-based [v1], v4 - Random [v4], v6 - Reordered Time-based [v6], v7 - Unix Epoch Time-based [v7], Nil UUID (all zeros) [nil], Max UUID (all ones) [max]",
+											"caption": "Select the UUID version to generate."
+										},
+										{
+											"id": "uuidFormat",
+											"title": "Format",
+											"type": "select",
+											"value": "Standard (lowercase with dashes) [standard], Uppercase [uppercase], No dashes [nodashes], URN format [urn]",
+											"caption": "Select the output format for the UUID."
+										},
+										{
+											"id": "uuidCount",
+											"title": "Number of UUIDs",
+											"type": "text",
+											"value": "1",
+											"variant": "number",
+											"caption": "How many UUIDs to generate (1-100)."
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"notes": "",
+				"icon": "",
+				"uid": "",
+				"gid": ""
+			}
+		}
+	]
+}

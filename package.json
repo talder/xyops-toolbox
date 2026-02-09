@@ -1,0 +1,31 @@
+{
+	"name": "xkops-toolbox",
+	"version": "1.0.0",
+	"private": true,
+	"description": "A xyOps Event Plugin toolbox containing utility generators including Token Generator and UUID Generator.",
+	"author": "Tim Alderweireldt",
+	"homepage": "https://github.com/talder/xkops-toolbox",
+	"license": "MIT",
+	"type": "commonjs",
+	"bin": {
+		"xkops-toolbox": "index.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/talder/xkops-toolbox"
+	},
+	"bugs": {
+		"url": "https://github.com/talder/xkops-toolbox/issues"
+	},
+	"keywords": [
+		"xyops",
+		"toolbox",
+		"token",
+		"uuid",
+		"generator"
+	],
+	"dependencies": {},
+	"engines": {
+		"node": ">=14.0.0"
+	}
+}
