@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
+const figlet = require('figlet');
 
 // ============================================
 // STDIN READER
@@ -546,6 +547,95 @@ async function runQRCode(params, jobInput, cwd) {
 }
 
 // ============================================
+// ASCII ART GENERATOR
+// ============================================
+
+function runAsciiArt(params, jobInput, cwd) {
+	return new Promise((resolve, reject) => {
+		progress(0.1, 'Validating parameters...');
+		
+		const source = params.asciiSource || 'field';
+		let text = '';
+		
+		if (source === 'input') {
+			const inputData = jobInput?.data;
+			if (!inputData) {
+				return reject(new Error('No input data available from previous job'));
+			}
+			const dataPath = params.asciiDataPath || '';
+			const value = getNestedValue(inputData, dataPath);
+			if (value === undefined) {
+				return reject(new Error(`Data path '${dataPath}' not found in input data`));
+			}
+			text = typeof value === 'string' ? value : JSON.stringify(value);
+		} else {
+			text = params.asciiText || '';
+		}
+		
+		if (!text) {
+			return reject(new Error('No text provided for ASCII art'));
+		}
+		
+		const font = params.asciiFont || 'Standard';
+		const horizontalLayout = params.asciiHorizontalLayout || 'default';
+		const verticalLayout = params.asciiVerticalLayout || 'default';
+		const width = Math.min(200, Math.max(40, parseInt(params.asciiWidth) || 80));
+		
+		progress(0.3, `Generating ASCII art with ${font} font...`);
+		
+		const options = {
+			font: font,
+			horizontalLayout: horizontalLayout,
+			verticalLayout: verticalLayout,
+			width: width
+		};
+		
+		figlet.text(text, options, (err, asciiResult) => {
+			if (err) {
+				return reject(new Error(`Failed to generate ASCII art: ${err.message}`));
+			}
+			
+			progress(0.95, 'Finalizing...');
+			
+			const lines = asciiResult.split('\n');
+			const result = {
+				tool: 'ASCII Art Generator',
+				text: text,
+				font: font,
+				horizontalLayout: horizontalLayout,
+				verticalLayout: verticalLayout,
+				width: width,
+				asciiArt: asciiResult,
+				lines: lines.length
+			};
+			
+			// Save to file
+			const filename = 'ascii-art.txt';
+			const filePath = path.join(cwd, filename);
+			fs.writeFileSync(filePath, asciiResult, 'utf8');
+			
+			result.filename = filename;
+			
+			// Output file for xyOps
+			output({
+				files: [filename]
+			});
+			
+			// Output as preformatted text
+			output({
+				text: {
+					title: 'ASCII Art',
+					content: asciiResult,
+					caption: `Generated with ${font} font (${lines.length} lines) - saved as ${filename}`
+				}
+			});
+			
+			resolve(result);
+		});
+	});
+}
+
+// ============================================
 // MAIN
 // ============================================
 
@@ -570,6 +660,9 @@ async function main() {
 				break;
 			case 'qrCode':
 				result = await runQRCode(params, job.input, cwd);
+				break;
+		case 'asciiArt':
+				result = await runAsciiArt(params, job.input, cwd);
 				break;
 			default:
 				throw new Error(`Unknown tool: ${tool}`);

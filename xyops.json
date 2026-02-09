@@ -203,6 +203,63 @@
 											"caption": "Filename for the generated QR code image."
 										}
 									]
+								},
+								{
+									"id": "asciiArt",
+									"title": "ASCII Art Generator",
+									"description": "Create ASCII art text with many fonts and styles.",
+									"fields": [
+										{
+											"id": "asciiSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the text from."
+										},
+										{
+											"id": "asciiText",
+											"title": "Your Text",
+											"type": "textarea",
+											"value": "",
+											"caption": "Enter the text to convert to ASCII art."
+										},
+										{
+											"id": "asciiDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										},
+										{
+											"id": "asciiFont",
+											"title": "Font",
+											"type": "select",
+											"value": "Standard [Standard], Big [Big], Banner [Banner], Block [Block], Doom [Doom], Slant [Slant], Small [Small], Small Slant [Small Slant], Script [Script], Shadow [Shadow], Speed [Speed], Star Wars [Star Wars], Graffiti [Graffiti], Colossal [Colossal], 3D-ASCII [3D-ASCII], Alligator [Alligator], Alphabet [Alphabet], Avatar [Avatar], Bulbhead [Bulbhead], Cybermedium [Cybermedium], Digital [Digital], Doh [Doh], Epic [Epic], Isometric1 [Isometric1], Larry 3D [Larry 3D], Letters [Letters], NScript [NScript], Ogre [Ogre], Rectangles [Rectangles], Roman [Roman], Rounded [Rounded], Serifcap [Serifcap], Shimrod [Shimrod], Soft [Soft], Standard [Standard], Sub-Zero [Sub-Zero], Thick [Thick], Univers [Univers], Weird [Weird]",
+											"caption": "Select the ASCII art font style."
+										},
+										{
+											"id": "asciiHorizontalLayout",
+											"title": "Horizontal Layout",
+											"type": "select",
+											"value": "Default [default], Full [full], Fitted [fitted], Controlled Smushing [controlled smushing], Universal Smushing [universal smushing]",
+											"caption": "How characters are spaced horizontally."
+										},
+										{
+											"id": "asciiVerticalLayout",
+											"title": "Vertical Layout",
+											"type": "select",
+											"value": "Default [default], Full [full], Fitted [fitted], Controlled Smushing [controlled smushing], Universal Smushing [universal smushing]",
+											"caption": "How lines are spaced vertically."
+										},
+										{
+											"id": "asciiWidth",
+											"title": "Max Width",
+											"type": "text",
+											"value": 80,
+											"variant": "number",
+											"caption": "Maximum width in characters (40-200)."
+										}
+									]
 								}
 							]
 						}

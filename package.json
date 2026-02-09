@@ -25,6 +25,7 @@
 		"generator"
 	],
 	"dependencies": {
+		"figlet": "^1.7.0",
 		"qrcode": "^1.5.3"
 	},
 	"engines": {
