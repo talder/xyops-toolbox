@@ -339,12 +339,60 @@
 											"caption": "Add a random symbol (!@#$%^&*) to the passphrase."
 										},
 										{
-											"id": "ppCount",
+									"id": "ppCount",
 											"title": "Number of Passphrases",
 											"type": "text",
 											"value": 1,
 											"variant": "number",
 											"caption": "How many passphrases to generate (1-20)."
+										}
+									]
+								},
+								{
+									"id": "loremIpsum",
+									"title": "Lorem Ipsum Generator",
+									"description": "Generate placeholder Lorem Ipsum text with customizable paragraphs, sentences, and word counts.",
+									"fields": [
+										{
+											"id": "loremParagraphs",
+											"title": "Paragraphs",
+											"type": "slider",
+											"value": 3,
+											"min": 1,
+											"max": 20,
+											"caption": "Number of paragraphs to generate (1-20)."
+										},
+										{
+											"id": "loremSentences",
+											"title": "Sentences per paragraph",
+											"type": "slider",
+											"value": 4,
+											"min": 1,
+											"max": 10,
+											"caption": "Number of sentences per paragraph (1-10)."
+										},
+										{
+											"id": "loremWords",
+											"title": "Words per sentence",
+											"type": "slider",
+											"value": 10,
+											"min": 3,
+											"max": 25,
+											"caption": "Average number of words per sentence (3-25)."
+										},
+										{
+											"id": "loremStartWithLorem",
+											"title": "Start with lorem ipsum ?",
+											"type": "checkbox",
+											"value": true,
+											"caption": "Begin the text with 'Lorem ipsum' for classic placeholder text."
+										},
+										{
+											"id": "loremAsHtml",
+											"title": "As html ?",
+											"type": "checkbox",
+											"value": false,
+											"caption": "Wrap paragraphs in HTML <p> tags."
 										}
 									]
 								}

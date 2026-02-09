@@ -1148,6 +1148,128 @@ function runIbanValidator(params, jobInput) {
 }
 
 // ============================================
+// LOREM IPSUM GENERATOR
+// ============================================
+
+const LOREM_WORDS = [
+	'lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit',
+	'sed', 'do', 'eiusmod', 'tempor', 'incididunt', 'ut', 'labore', 'et', 'dolore',
+	'magna', 'aliqua', 'enim', 'ad', 'minim', 'veniam', 'quis', 'nostrud',
+	'exercitation', 'ullamco', 'laboris', 'nisi', 'aliquip', 'ex', 'ea', 'commodo',
+	'consequat', 'duis', 'aute', 'irure', 'in', 'reprehenderit', 'voluptate',
+	'velit', 'esse', 'cillum', 'fugiat', 'nulla', 'pariatur', 'excepteur', 'sint',
+	'occaecat', 'cupidatat', 'non', 'proident', 'sunt', 'culpa', 'qui', 'officia',
+	'deserunt', 'mollit', 'anim', 'id', 'est', 'laborum', 'ac', 'accumsan',
+	'aliquet', 'aliquam', 'ante', 'aptent', 'arcu', 'at', 'auctor', 'augue',
+	'bibendum', 'blandit', 'condimentum', 'congue', 'cras', 'curabitur', 'cursus',
+	'dapibus', 'diam', 'dictum', 'dictumst', 'dignissim', 'dis', 'donec', 'egestas',
+	'eget', 'eleifend', 'elementum', 'eros', 'etiam', 'eu', 'euismod', 'facilisi',
+	'facilisis', 'fames', 'faucibus', 'felis', 'fermentum', 'feugiat', 'fringilla',
+	'fusce', 'gravida', 'habitant', 'habitasse', 'hac', 'hendrerit', 'himenaeos',
+	'iaculis', 'imperdiet', 'inceptos', 'integer', 'interdum', 'justo', 'lacinia',
+	'lacus', 'laoreet', 'lectus', 'leo', 'libero', 'ligula', 'litora', 'lobortis',
+	'luctus', 'maecenas', 'massa', 'mattis', 'mauris', 'metus', 'mi', 'morbi',
+	'nam', 'nascetur', 'natoque', 'nec', 'neque', 'nibh', 'nisl', 'nullam', 'nunc',
+	'odio', 'orci', 'ornare', 'parturient', 'pellentesque', 'penatibus', 'per',
+	'pharetra', 'phasellus', 'placerat', 'platea', 'porta', 'porttitor', 'posuere',
+	'potenti', 'praesent', 'pretium', 'primis', 'proin', 'pulvinar', 'purus',
+	'quam', 'quisque', 'rhoncus', 'ridiculus', 'risus', 'rutrum', 'sagittis',
+	'sapien', 'scelerisque', 'semper', 'senectus', 'sociosqu', 'sodales', 'sollicitudin',
+	'suscipit', 'suspendisse', 'taciti', 'tellus', 'tempus', 'tincidunt', 'torquent',
+	'tortor', 'tristique', 'turpis', 'ultrices', 'ultricies', 'urna', 'varius',
+	'vehicula', 'vel', 'venenatis', 'vestibulum', 'vitae', 'vivamus', 'viverra', 'volutpat', 'vulputate'
+];
+
+function generateLoremSentence(wordsPerSentence, startWithLorem, isFirstSentence) {
+	const words = [];
+	const wordCount = Math.max(3, Math.min(50, wordsPerSentence));
+	
+	for (let i = 0; i < wordCount; i++) {
+		if (startWithLorem && isFirstSentence && i < 2) {
+			words.push(i === 0 ? 'Lorem' : 'ipsum');
+		} else {
+			const randomIndex = crypto.randomInt(LOREM_WORDS.length);
+			let word = LOREM_WORDS[randomIndex];
+			// Capitalize first word of sentence
+			if (i === 0) {
+				word = word.charAt(0).toUpperCase() + word.slice(1);
+			}
+			words.push(word);
+		}
+	}
+	
+	return words.join(' ') + '.';
+}
+
+function generateLoremParagraph(sentencesPerParagraph, wordsPerSentence, startWithLorem, isFirstParagraph) {
+	const sentences = [];
+	const sentenceCount = Math.max(1, Math.min(20, sentencesPerParagraph));
+	
+	for (let i = 0; i < sentenceCount; i++) {
+		const isFirstSentence = isFirstParagraph && i === 0;
+		sentences.push(generateLoremSentence(wordsPerSentence, startWithLorem, isFirstSentence));
+	}
+	
+	return sentences.join(' ');
+}
+
+function runLoremIpsum(params) {
+	progress(0.1, 'Validating parameters...');
+	
+	const paragraphs = Math.min(50, Math.max(1, parseInt(params.loremParagraphs) || 3));
+	const sentencesPerParagraph = Math.min(20, Math.max(1, parseInt(params.loremSentences) || 4));
+	const wordsPerSentence = Math.min(50, Math.max(3, parseInt(params.loremWords) || 10));
+	const startWithLorem = params.loremStartWithLorem !== false;
+	const asHtml = params.loremAsHtml === true;
+	
+	progress(0.3, `Generating ${paragraphs} paragraph(s)...`);
+	
+	const paragraphTexts = [];
+	for (let i = 0; i < paragraphs; i++) {
+		paragraphTexts.push(generateLoremParagraph(sentencesPerParagraph, wordsPerSentence, startWithLorem, i === 0));
+		progress(0.3 + (0.6 * (i + 1) / paragraphs), `Generated ${i + 1} of ${paragraphs} paragraphs...`);
+	}
+	
+	progress(0.95, 'Finalizing...');
+	
+	let text;
+	if (asHtml) {
+		text = paragraphTexts.map(p => `<p>${p}</p>`).join('\n');
+	} else {
+		text = paragraphTexts.join('\n\n');
+	}
+	
+	// Count statistics
+	const totalWords = paragraphTexts.reduce((sum, p) => sum + p.split(/\s+/).length, 0);
+	const totalSentences = paragraphTexts.reduce((sum, p) => sum + (p.match(/\./g) || []).length, 0);
+	const totalChars = text.length;
+	
+	const result = {
+		tool: 'Lorem Ipsum Generator',
+		text: text,
+		paragraphs: paragraphs,
+		sentencesPerParagraph: sentencesPerParagraph,
+		wordsPerSentence: wordsPerSentence,
+		startWithLorem: startWithLorem,
+		asHtml: asHtml,
+		totalWords: totalWords,
+		totalSentences: totalSentences,
+		totalCharacters: totalChars
+	};
+	
+	// Output text for UI
+	output({
+		text: {
+			title: 'Generated Lorem Ipsum',
+			content: text,
+			caption: `${paragraphs} paragraph(s) | ${totalSentences} sentences | ${totalWords} words | ${totalChars} characters${asHtml ? ' (HTML)' : ''}`
+		}
+	});
+	
+	return result;
+}
+
+// ============================================
 // ASCII ART GENERATOR
 // ============================================
 
@@ -1268,8 +1390,11 @@ async function main() {
 		case 'ibanValidator':
 				result = runIbanValidator(params, job.input);
 				break;
-			case 'passphrase':
+		case 'passphrase':
 				result = runPassphraseGenerator(params);
+				break;
+			case 'loremIpsum':
+				result = runLoremIpsum(params);
 				break;
 			default:
 				throw new Error(`Unknown tool: ${tool}`);
