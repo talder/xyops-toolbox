@@ -288,6 +288,65 @@
 											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
 										}
 									]
+								},
+								{
+									"id": "passphrase",
+									"title": "Passphrase Generator",
+									"description": "Generate secure, memorable passphrases using random words.",
+									"fields": [
+										{
+											"id": "ppWordCount",
+											"title": "Number of Words",
+											"type": "text",
+											"value": 4,
+											"variant": "number",
+											"caption": "Number of words in the passphrase (3-10)."
+										},
+										{
+											"id": "ppMaxWordLength",
+											"title": "Max Word Length",
+											"type": "text",
+											"value": 8,
+											"variant": "number",
+											"caption": "Maximum length of each word in characters (3-15)."
+										},
+										{
+											"id": "ppSeparator",
+											"title": "Separator",
+											"type": "select",
+											"value": "Hyphen (-) [hyphen], Space ( ) [space], Dot (.) [dot], Underscore (_) [underscore], None [none]",
+											"caption": "Character used to separate words."
+										},
+										{
+											"id": "ppCapitalize",
+											"title": "Capitalize Words",
+											"type": "checkbox",
+											"value": true,
+											"caption": "Capitalize the first letter of each word."
+										},
+										{
+											"id": "ppIncludeNumber",
+											"title": "Include Number",
+											"type": "checkbox",
+											"value": true,
+											"caption": "Add a random number (0-99) to the passphrase."
+										},
+										{
+											"id": "ppIncludeSymbol",
+											"title": "Include Symbol",
+											"type": "checkbox",
+											"value": false,
+											"caption": "Add a random symbol (!@#$%^&*) to the passphrase."
+										},
+										{
+											"id": "ppCount",
+											"title": "Number of Passphrases",
+											"type": "text",
+											"value": 1,
+											"variant": "number",
+											"caption": "How many passphrases to generate (1-20)."
+										}
+									]
 								}
 							]
 						}
