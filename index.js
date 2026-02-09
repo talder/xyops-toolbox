@@ -492,11 +492,6 @@ async function runQRCode(params, jobInput, cwd) {
 	const filePath = path.join(cwd, filename);
 	await QRCode.toFile(filePath, text, options);
 	
-	progress(0.6, 'Generating preview...');
-	
-	// Generate base64 data URL for HTML preview
-	const dataUrl = await QRCode.toDataURL(text, options);
-	
 	progress(0.8, 'QR code generated...');
 	
 	// Get file stats
@@ -521,25 +516,24 @@ async function runQRCode(params, jobInput, cwd) {
 		errorLevel: errorLevel,
 		errorLevelName: errorLevelNames[errorLevel],
 		foregroundColor: foreground,
-		backgroundColor: background,
-		dataUrl: dataUrl
+		backgroundColor: background
 	};
 	
-	// Output file info for xyOps
+	// Output table for UI
 	output({
-		files: [{
-			filename: filename,
-			size: stats.size
-		}]
-	});
-	
-	// Output HTML with embedded QR code image
-	const displayText = text.length > 60 ? text.substring(0, 60) + '...' : text;
-	output({
-		html: {
-			title: 'QR Code',
-			content: `<div style="text-align:center;padding:20px;"><img src="${dataUrl}" alt="QR Code" style="max-width:100%;border:1px solid #ccc;border-radius:8px;"/><p style="margin-top:12px;color:#666;font-size:14px;"><b>Content:</b> ${displayText}</p><p style="color:#999;font-size:12px;">${size}x${size}px | ${errorLevelNames[errorLevel]} error correction | ${filename}</p></div>`,
-			caption: `QR code saved as ${filename} (${stats.size} bytes)`
+		table: {
+			title: 'QR Code Generated',
+			header: ['Property', 'Value'],
+			rows: [
+				['Content', text.length > 50 ? text.substring(0, 50) + '...' : text],
+				['Image Size', `${size}x${size} pixels`],
+				['Error Correction', errorLevelNames[errorLevel]],
+				['Foreground', foreground],
+				['Background', background],
+				['File', filename],
+				['File Size', `${stats.size} bytes`]
+			],
+			caption: `QR code saved as ${filename}`
 		}
 	});
 	
