@@ -356,28 +356,25 @@
 										{
 											"id": "loremParagraphs",
 											"title": "Paragraphs",
-											"type": "slider",
+											"type": "text",
 											"value": 3,
-											"min": 1,
-											"max": 20,
+											"variant": "number",
 											"caption": "Number of paragraphs to generate (1-20)."
 										},
 										{
 											"id": "loremSentences",
 											"title": "Sentences per paragraph",
-											"type": "slider",
+											"type": "text",
 											"value": 4,
-											"min": 1,
-											"max": 10,
+											"variant": "number",
 											"caption": "Number of sentences per paragraph (1-10)."
 										},
 										{
 											"id": "loremWords",
 											"title": "Words per sentence",
-											"type": "slider",
+											"type": "text",
 											"value": 10,
-											"min": 3,
-											"max": 25,
+											"variant": "number",
 											"caption": "Average number of words per sentence (3-25)."
 										},
 										{
