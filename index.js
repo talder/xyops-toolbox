@@ -519,6 +519,11 @@ async function runQRCode(params, jobInput, cwd) {
 		backgroundColor: background
 	};
 	
+	// Output file for xyOps (array of filenames in cwd)
+	output({
+		files: [filename]
+	});
+	
 	// Output table for UI
 	output({
 		table: {
