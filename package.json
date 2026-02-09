@@ -24,7 +24,9 @@
 		"uuid",
 		"generator"
 	],
-	"dependencies": {},
+	"dependencies": {
+		"qrcode": "^1.5.3"
+	},
 	"engines": {
 		"node": ">=14.0.0"
 	}

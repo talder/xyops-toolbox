@@ -9,6 +9,9 @@
  */
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const QRCode = require('qrcode');
 
 // ============================================
 // STDIN READER
@@ -360,11 +363,41 @@ function computeHash(text, algorithm, encoding) {
 	}
 }
 
-function runHashText(params) {
+function getNestedValue(obj, path) {
+	if (!path || path.trim() === '') return obj;
+	const parts = path.split('.');
+	let current = obj;
+	for (const part of parts) {
+		if (current === null || current === undefined) return undefined;
+		current = current[part];
+	}
+	return current;
+}
+
+function runHashText(params, jobInput) {
 	progress(0.1, 'Validating parameters...');
 	
-	const text = params.hashInput || '';
+	const source = params.hashSource || 'field';
 	const encoding = params.hashEncoding || 'hex';
+	let text = '';
+	
+	if (source === 'input') {
+		// Get text from job input data
+		const inputData = jobInput?.data;
+		if (!inputData) {
+			throw new Error('No input data available from previous job');
+		}
+		const dataPath = params.hashDataPath || '';
+		const value = getNestedValue(inputData, dataPath);
+		if (value === undefined) {
+			throw new Error(`Data path '${dataPath}' not found in input data`);
+		}
+		// Convert to string if needed
+		text = typeof value === 'string' ? value : JSON.stringify(value);
+	} else {
+		// Get text from parameter field
+		text = params.hashInput || '';
+	}
 	
 	progress(0.2, 'Computing hashes...');
 	
@@ -409,6 +442,111 @@ function runHashText(params) {
 }
 
 // ============================================
+// QR CODE GENERATOR
+// ============================================
+
+async function runQRCode(params, jobInput, cwd) {
+	progress(0.1, 'Validating parameters...');
+	
+	const source = params.qrSource || 'field';
+	let text = '';
+	
+	if (source === 'input') {
+		const inputData = jobInput?.data;
+		if (!inputData) {
+			throw new Error('No input data available from previous job');
+		}
+		const dataPath = params.qrDataPath || '';
+		const value = getNestedValue(inputData, dataPath);
+		if (value === undefined) {
+			throw new Error(`Data path '${dataPath}' not found in input data`);
+		}
+		text = typeof value === 'string' ? value : JSON.stringify(value);
+	} else {
+		text = params.qrText || '';
+	}
+	
+	if (!text) {
+		throw new Error('No text or URL provided for QR code');
+	}
+	
+	const foreground = params.qrForeground || '#000000';
+	const background = params.qrBackground || '#ffffff';
+	const errorLevel = params.qrErrorLevel || 'M';
+	const size = Math.min(1024, Math.max(64, parseInt(params.qrSize) || 256));
+	const filename = params.qrFilename || 'qrcode.png';
+	
+	progress(0.3, 'Generating QR code...');
+	
+	const options = {
+		errorCorrectionLevel: errorLevel,
+		width: size,
+		margin: 2,
+		color: {
+			dark: foreground,
+			light: background
+		}
+	};
+	
+	// Generate QR code as PNG file
+	const filePath = path.join(cwd, filename);
+	await QRCode.toFile(filePath, text, options);
+	
+	progress(0.6, 'Generating preview...');
+	
+	// Generate base64 data URL for HTML preview
+	const dataUrl = await QRCode.toDataURL(text, options);
+	
+	progress(0.8, 'QR code generated...');
+	
+	// Get file stats
+	const stats = fs.statSync(filePath);
+	
+	progress(0.95, 'Finalizing...');
+	
+	const errorLevelNames = {
+		L: 'Low (~7%)',
+		M: 'Medium (~15%)',
+		Q: 'Quartile (~25%)',
+		H: 'High (~30%)'
+	};
+	
+	const result = {
+		tool: 'QR Code Generator',
+		text: text,
+		textLength: text.length,
+		filename: filename,
+		fileSize: stats.size,
+		size: size,
+		errorLevel: errorLevel,
+		errorLevelName: errorLevelNames[errorLevel],
+		foregroundColor: foreground,
+		backgroundColor: background,
+		dataUrl: dataUrl
+	};
+	
+	// Output file info for xyOps
+	output({
+		files: [{
+			filename: filename,
+			size: stats.size
+		}]
+	});
+	
+	// Output HTML with embedded QR code image
+	const displayText = text.length > 60 ? text.substring(0, 60) + '...' : text;
+	output({
+		html: {
+			title: 'QR Code',
+			content: `<div style="text-align:center;padding:20px;"><img src="${dataUrl}" alt="QR Code" style="max-width:100%;border:1px solid #ccc;border-radius:8px;"/><p style="margin-top:12px;color:#666;font-size:14px;"><b>Content:</b> ${displayText}</p><p style="color:#999;font-size:12px;">${size}x${size}px | ${errorLevelNames[errorLevel]} error correction | ${filename}</p></div>`,
+			caption: `QR code saved as ${filename} (${stats.size} bytes)`
+		}
+	});
+	
+	return result;
+}
+
+// ============================================
 // MAIN
 // ============================================
 
@@ -417,6 +555,7 @@ async function main() {
 		const job = await readStdin();
 		const params = job.params || {};
 		const tool = params.tool || 'tokenGenerator';
+		const cwd = job.cwd || process.cwd();
 		
 		let result;
 		
@@ -428,7 +567,10 @@ async function main() {
 				result = runUUIDGenerator(params);
 				break;
 			case 'hashText':
-				result = runHashText(params);
+				result = await runHashText(params, job.input);
+				break;
+			case 'qrCode':
+				result = await runQRCode(params, job.input, cwd);
 				break;
 			default:
 				throw new Error(`Unknown tool: ${tool}`);

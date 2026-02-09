@@ -109,11 +109,25 @@
 									"description": "Hash a text string using multiple algorithms: MD5, SHA1, SHA256, SHA224, SHA512, SHA384, SHA3, RIPEMD160.",
 									"fields": [
 										{
+											"id": "hashSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the text to hash from."
+										},
+										{
 											"id": "hashInput",
 											"title": "Text to Hash",
 											"type": "textarea",
 											"value": "",
-											"caption": "Enter the text string you want to hash."
+											"caption": "Enter the text string you want to hash. (Used when Data Source is 'text field')"
+										},
+										{
+											"id": "hashDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field (e.g. 'user.name'). Leave empty to use entire input data as string. (Used when Data Source is 'input data')"
 										},
 										{
 											"id": "hashEncoding",
@@ -121,6 +135,72 @@
 											"type": "select",
 											"value": "Hexadecimal (base 16) [hex], Base64 [base64], Binary (raw) [binary]",
 											"caption": "Select the output encoding for the hash digests."
+										}
+									]
+								},
+								{
+									"id": "qrCode",
+									"title": "QR Code Generator",
+									"description": "Generate a QR code for a URL or text with customizable colors and error correction.",
+									"fields": [
+										{
+											"id": "qrSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the text/URL to encode."
+										},
+										{
+											"id": "qrText",
+											"title": "Text / URL",
+											"type": "textarea",
+											"value": "",
+											"caption": "Enter the text or URL to encode in the QR code."
+										},
+										{
+											"id": "qrDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										},
+										{
+											"id": "qrForeground",
+											"title": "Foreground Color",
+											"type": "text",
+											"value": "#000000",
+											"variant": "color",
+											"caption": "Color of the QR code modules (dark parts)."
+										},
+										{
+											"id": "qrBackground",
+											"title": "Background Color",
+											"type": "text",
+											"value": "#ffffff",
+											"variant": "color",
+											"caption": "Background color of the QR code."
+										},
+										{
+											"id": "qrErrorLevel",
+											"title": "Error Resistance",
+											"type": "select",
+											"value": "Low (~7% recovery) [L], Medium (~15% recovery) [M], Quartile (~25% recovery) [Q], High (~30% recovery) [H]",
+											"caption": "Higher error correction allows the QR code to be read even if partially damaged."
+										},
+										{
+											"id": "qrSize",
+											"title": "Image Size",
+											"type": "text",
+											"value": 256,
+											"variant": "number",
+											"caption": "Width/height of the generated PNG image in pixels (64-1024)."
+										},
+										{
+											"id": "qrFilename",
+											"title": "Output Filename",
+											"type": "text",
+											"value": "qrcode.png",
+											"caption": "Filename for the generated QR code image."
 										}
 									]
 								}
