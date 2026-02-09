@@ -389,7 +389,7 @@
 											"title": "As html ?",
 											"type": "checkbox",
 											"value": false,
-											"caption": "Wrap paragraphs in HTML <p> tags."
+											"caption": "Wrap paragraphs in HTML paragraph tags."
 										}
 									]
 								}
