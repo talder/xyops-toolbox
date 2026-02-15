@@ -905,17 +905,34 @@ function Invoke-QRCode {
   Write-XY @{ files = @($filename) }
   Write-XY @{ table = @{ title='QR Code Generated'; header=@('Property','Value'); rows=@(@('Content', $displayContent), @('QR Version', "$version ($qrSize x $qrSize modules)"), @('Image Size',"${actualSize}x${actualSize} pixels"), @('Error Correction',$errorNames[$errorLevel]), @('Colors',"$foreground on $background"), @('File',$filename), @('File Size',"$($fi.Length) bytes")); caption = "QR code saved as $filename (pure PowerShell with Reed-Solomon ECC)" } }
 
-  return $result
+  [pscustomobject]@{ tool='QR Code Generated'; uuids=$uuids; count=$count; version=$version; versionName=$versionNames[$version]; format=$format; formatName=$formatNames[$format] }
 }
 
 # ------------------------- Passphrase Generator -------------------------
 $PP_SYMBOLS = '!@#$%^&*'
 
 function Get-WordList {
-  $path = Join-Path $PSScriptRoot 'wordlist.txt'
-  if (Test-Path $path) { return Get-Content -LiteralPath $path -ErrorAction Stop | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } }
-  # small fallback list (add your own wordlist.txt for more variety)
-  return @('alpha','bravo','charlie','delta','echo','foxtrot','golf','hotel','india','juliet','kilo','lima','mike','november','oscar','papa','quebec','romeo','sierra','tango','uniform','victor','whiskey','xray','yankee','zulu','apple','banana','cherry','grape','lemon','mango','orange','peach','pear','plum','berry','cloud','river','mountain','forest','ocean','desert','valley','meadow','sun','moon','star','sky','storm','breeze','snow','rain','fog','stone','metal','silver','gold','copper','iron','steam','spark','flame','ember','shadow','light')
+  # Comprehensive English wordlist with words from 3 to 8 characters
+  return @(
+    # 3-letter words
+    'ace','act','add','age','ago','aid','aim','air','all','and','ant','any','ape','apt','arc','are','ark','arm','art','ask','ate','bad','bag','bar','bat','bay','bed','bee','bet','big','bin','bit','box','boy','bud','bug','bun','bus','but','buy','cab','can','cap','car','cat','caw','cob','cod','cog','cop','cot','cow','cry','cub','cud','cue','cup','cut','dad','dam','day','den','dew','did','die','dig','dim','din','dip','dog','don','dot','dry','dub','dud','due','dug','dye','ear','eat','egg','ego','elf','elk','elm','end','era','eve','eye','fan','far','fat','fax','fed','fee','few','fib','fig','fin','fir','fit','fix','fly','foe','fog','for','fox','fry','fun','fur','gag','gap','gas','gel','gem','get','gig','gin','git','god','got','gum','gun','gut','guy','gym','had','has','hat','hay','hem','hen','her','hew','hex','hid','him','hip','his','hit','hog','hop','hot','how','hub','hue','hug','hum','hut','ice','ill','ink','inn','ion','its','ivy','jab','jag','jam','jar','jaw','jay','jet','jig','job','jog','jot','joy','jug','keg','ken','key','kid','kin','kit','lab','lad','lag','lap','law','lax','lay','lea','leg','let','lid','lie','lip','lit','log','lot','low','mad','man','map','mat','maw','max','may','men','met','mid','mix','mob','mod','mom','mop','mud','mug','nab','nag','nap','net','new','nil','nip','nit','nod','nor','not','now','nun','nut','oak','oar','oat','odd','off','oft','oil','old','one','opt','orb','ore','our','out','owe','owl','own','pad','pal','pan','pap','par','pat','paw','pax','pay','pea','peg','pen','pep','per','pet','pew','pie','pig','pin','pip','pit','ply','pod','pop','pot','pox','pro','pry','pub','pug','pun','pup','pus','put','rag','ram','ran','rap','rat','raw','ray','red','rep','rib','rid','rig','rim','rip','rob','rod','roe','rot','row','rub','rug','rum','run','rut','rye','sac','sad','sag','sap','sat','saw','sax','say','sea','see','set','sew','sex','she','shy','sin','sip','sir','sis','sit','six','ska','sky','sly','sob','sod','son','sop','sot','sow','sox','soy','spa','spy','sty','sub','sum','sun','sup','tab','tad','tag','tan','tap','tar','tax','tea','ten','the','thy','tic','tie','tin','tip','toe','ton','too','top','tot','tow','toy','try','tub','tug','two','urn','use','van','vet','vex','via','vie','vow','wad','wag','wan','war','was','wax','way','web','wed','wee','wet','who','why','wig','win','wit','woe','wok','won','woo','wow','yak','yam','yap','yaw','yea','yen','yes','yet','yew','yin','you','yow','yup','zap','zed','zee','zen','zoo','zoo',
+
+    # 4-letter words
+    'able','acid','aged','also','area','army','away','baby','back','ball','band','bank','base','bath','beat','been','beer','bell','belt','best','bill','bird','bite','blow','blue','boat','body','bomb','bond','bone','book','boot','bore','born','boss','both','bowl','boxy','boys','brag','brat','bred','brew','brim','bulb','bulk','bull','bump','burn','burst','buye','cafe','cage','cake','call','calm','came','camp','cane','cape','card','care','cart','case','cash','cast','cave','cell','cent','chap','chat','chef','chew','chin','chip','chop','cite','city','clad','clam','clap','class','claw','clay','clip','club','clue','coal','coat','code','coil','coin','cold','colo','comb','come','cook','cool','cope','copy','cord','core','cork','cost','cozy','crab','cram','crew','crop','crow','cube','cult','curb','cure','curl','cute','dang','dare','dark','dart','dash','data','date','dawn','days','dead','deaf','deal','dean','dear','debt','deck','deer','demo','dent','desk','dial','dice','died','diet','dime','dine','dire','dirt','disc','dish','disk','dive','dock','doll','dome','done','door','dope','dose','down','doze','drag','draw','drew','drip','drop','drub','drug','drum','dual','duck','dude','duel','dues','dull','dumb','dump','dune','dunk','dupe','dusk','dust','duty','each','earl','earn','earth','ease','east','easy','echo','edge','edit','eggs','egos','else','emit','envy','even','ever','evil','exam','exit','face','fact','fade','fail','fair','fake','fall','fame','fang','fare','farm','fast','fate','fawn','fear','feat','feed','feel','feet','fell','felt','fern','fest','feud','fiat','fief','file','fill','film','find','fine','fire','firm','fish','fist','five','flag','flak','flap','flat','flaw','flax','flay','flea','fled','flee','flew','flex','flip','flit','flog','flop','flow','flue','flux','foal','foam','foci','foil','fold','folk','fond','font','food','fool','foot','ford','fore','fork','form','fort','foul','four','fowl','foxy','frat','fray','free','fresh','frie','frog','from','fuel','full','fume','fund','funk','fury','fuse','fuss','fuzz','gait','gala','game','gang','garb','gash','gate','gave','gawk','gaze','gear','geek','gene','germ','gift','girl','give','glad','glee','glen','glow','glue','glum','glut','gnaw','goal','goat','goes','gold','golf','gone','gong','good','goof','gore','gory','gown','grab','gram','gray','grew','grey','grid','grin','grip','grit','grow','grub','guam','guar','guess','guest','guide','guild','guilt','guise','gulf','gull','gulp','guru','gush',
+
+    # 5-letter words
+    'about','above','abuse','actor','acute','admit','adopt','adult','after','again','agent','agree','ahead','alarm','album','alert','alike','alive','allow','alone','along','alter','among','anger','angle','angry','apart','apple','apply','arena','argue','arise','array','aside','asset','audio','audit','avoid','award','aware','badly','baker','bases','basic','basis','beach','began','begin','begun','being','below','bench','billy','birth','black','blame','blind','block','blood','board','boost','booth','bound','brain','brand','bread','break','breed','brief','bring','broad','broke','brown','build','built','buyer','cable','calif','carry','catch','cause','chain','chair','chart','chase','cheap','check','chest','chief','child','china','choir','choose','chronic','church','cigar','claim','class','clean','clear','click','clock','close','coach','coast','could','count','court','cover','craft','crash','cream','crime','cross','crowd','crown','curve','cycle','daily','dance','dated','dealt','death','debut','delay','depth','doing','doubt','dozen','draft','drama','drawn','dream','dress','drill','drink',
+
+    # 6-letter words
+    'accept','access','accuse','achieve','acquire','across','acting','action','active','actual','advice','advise','affect','afford','aftermath','against','agency','agenda','almost','already','although','always','amazing','amount','analyst','ancient','another','anxiety','anybody','anything','anytime','apparent','approach','approval','argument','artistic','assembly','athletic','attitude','attorney','audience','authority','available','average','backward','bacteria','baseball','beautiful','because','becoming','bedroom','behavior','believe','benefit','besides','between','billion','birthday','boundary','brother','building','business','calendar','campaign','capacity','capital','captain','capture','careful','carrying','category','caution','celebrate','cellular','cemetery','certainly',
+
+    # 7-letter words
+    'ability','absence','academy','account','accuracy','achieve','acquire','address','advance','adverse','advisory','advocate','aircraft','alcohol','although','amazing','analyst','ancient','another','anxiety','anybody','anything','anytime','apparent','approach','approval','argument','artistic','assembly','athletic','attitude','attorney','audience','authority','available','average','backward','bacteria','baseball','beautiful','because','becoming','bedroom','behavior','believe','benefit','besides','between','billion','birthday','boundary','brother','building','business','calendar','campaign','capacity','capital','captain','capture','careful','carrying','category','caution','celebrate','cellular','cemetery','certainly',
+
+    # 8-letter words
+    'absolute','academic','accepted','accident','according','accounting','accuracy','achievement','acknowledge','acquire','acquisition','activity','actually','additional','adequate','adjustment','administration','advantage','adventure','advertising','advisable','advisory','advocate','aesthetic','affecting','affection','affiliate','affirmative','affordable','afternoon','afterward','against','aggressive','agreement','agricultural','alcoholic','algorithm','alliance','although','altogether','amazing','ambassador','amendment','ammunition','amongst','amounted','analysis','ancestor','ancient','anderson','announce','annual','another','answering','antibody','anybody','anything','anywhere','apparent','apparently','appealing','appearance','appetite','application','appointment','appreciate','approach','appropriate','approval','approximately','architect','argument','arise','arrangement','arrival','artistic','assembly','athletic','attaching','attempt','attend','attention','attitude','attorney','attract','auction','audience','author','authority','available','average','avoid','awaiting','background','bacteria','baseball','beautiful','because','becoming','bedroom','behavior','believe','benefit'
+
+  )
 }
 
 function New-Passphrase {
@@ -945,7 +962,7 @@ function New-Passphrase {
     $num = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32(100)
     $parts = if ($sep) { $pass.Split($sep) } else { [string[]]$sel }
     $pos = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($parts.Length + 1)
-    $pass = ($parts[0..($pos-1)] + @($num.ToString()) + $parts[$pos..($parts.Length-1)]) -join $sep
+    $pass = (@($parts[0..($pos-1)]) + @($num.ToString()) + @($parts[$pos..($parts.Length-1)])) -join $sep
   }
   if ($IncludeSymbol) {
     $sym = $PP_SYMBOLS[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($PP_SYMBOLS.Length)]
@@ -1057,7 +1074,9 @@ function Invoke-IBANValidator {
     @{ title='IBAN Validation Result'; header=@('Property','Value'); rows=@(@('Status','✗ Invalid IBAN'), @('Input',$iban), @('Error',$validation.error)); caption='IBAN validation failed' }
   }
   Write-XY @{ table = $table }
-  [pscustomobject]@{ tool='IBAN Validator'; input=$iban } + $validation
+  $result = @{ tool='IBAN Validator'; input=$iban }
+  $result += $validation
+  [pscustomobject]$result
 }
 
 # ------------------------- Lorem Ipsum -------------------------
