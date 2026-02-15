@@ -205,63 +205,6 @@
 									]
 								},
 								{
-									"id": "asciiArt",
-									"title": "ASCII Art Generator",
-									"description": "Create ASCII art text with many fonts and styles.",
-									"fields": [
-										{
-											"id": "asciiSource",
-											"title": "Data Source",
-											"type": "select",
-											"value": "Use text field below [field], Use job input data [input]",
-											"caption": "Choose where to get the text from."
-										},
-										{
-											"id": "asciiText",
-											"title": "Your Text",
-											"type": "textarea",
-											"value": "",
-											"caption": "Enter the text to convert to ASCII art."
-										},
-										{
-											"id": "asciiDataPath",
-											"title": "Input Data Path",
-											"type": "text",
-											"value": "",
-											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
-										},
-										{
-											"id": "asciiFont",
-											"title": "Font",
-											"type": "select",
-											"value": "Standard [Standard], Big [Big], Banner [Banner], Block [Block], Doom [Doom], Slant [Slant], Small [Small], Small Slant [Small Slant], Script [Script], Shadow [Shadow], Speed [Speed], Star Wars [Star Wars], Graffiti [Graffiti], Colossal [Colossal], 3D-ASCII [3D-ASCII], Alligator [Alligator], Alphabet [Alphabet], Avatar [Avatar], Bulbhead [Bulbhead], Cybermedium [Cybermedium], Digital [Digital], Doh [Doh], Epic [Epic], Isometric1 [Isometric1], Larry 3D [Larry 3D], Letters [Letters], NScript [NScript], Ogre [Ogre], Rectangles [Rectangles], Roman [Roman], Rounded [Rounded], Serifcap [Serifcap], Shimrod [Shimrod], Soft [Soft], Standard [Standard], Sub-Zero [Sub-Zero], Thick [Thick], Univers [Univers], Weird [Weird]",
-											"caption": "Select the ASCII art font style."
-										},
-										{
-											"id": "asciiHorizontalLayout",
-											"title": "Horizontal Layout",
-											"type": "select",
-											"value": "Default [default], Full [full], Fitted [fitted], Controlled Smushing [controlled smushing], Universal Smushing [universal smushing]",
-											"caption": "How characters are spaced horizontally."
-										},
-										{
-											"id": "asciiVerticalLayout",
-											"title": "Vertical Layout",
-											"type": "select",
-											"value": "Default [default], Full [full], Fitted [fitted], Controlled Smushing [controlled smushing], Universal Smushing [universal smushing]",
-											"caption": "How lines are spaced vertically."
-										},
-										{
-											"id": "asciiWidth",
-											"title": "Max Width",
-											"type": "text",
-											"value": 80,
-											"variant": "number",
-											"caption": "Maximum width in characters (40-200)."
-										}
-									]
-								},
-								{
 									"id": "ibanValidator",
 									"title": "IBAN Validator",
 									"description": "Validate IBAN (International Bank Account Number) and extract country, check digits, and BBAN.",
@@ -390,6 +333,443 @@
 											"type": "checkbox",
 											"value": false,
 											"caption": "Wrap paragraphs in HTML paragraph tags."
+										}
+									]
+								},
+								{
+									"id": "base64",
+									"title": "Base64 Encoder/Decoder",
+									"description": "Encode or decode text using Base64 encoding.",
+									"fields": [
+										{
+											"id": "base64Mode",
+											"title": "Mode",
+											"type": "select",
+											"value": "Encode [encode], Decode [decode]",
+											"caption": "Choose to encode or decode."
+										},
+										{
+											"id": "base64Source",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the input text."
+										},
+										{
+											"id": "base64Input",
+											"title": "Input Text",
+											"type": "textarea",
+											"value": "",
+											"caption": "Text to encode or Base64 string to decode."
+										},
+										{
+											"id": "base64DataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "urlEncode",
+									"title": "URL Encoder/Decoder",
+									"description": "Encode or decode URL components and query strings.",
+									"fields": [
+										{
+											"id": "urlMode",
+											"title": "Mode",
+											"type": "select",
+											"value": "Encode [encode], Decode [decode]",
+											"caption": "Choose to encode or decode."
+										},
+										{
+											"id": "urlSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the input text."
+										},
+										{
+											"id": "urlInput",
+											"title": "Input Text",
+											"type": "textarea",
+											"value": "",
+											"caption": "Text to encode or URL-encoded string to decode."
+										},
+										{
+											"id": "urlDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "timestamp",
+									"title": "Timestamp Converter",
+									"description": "Convert between Unix timestamps, ISO 8601, and human-readable date formats.",
+									"fields": [
+										{
+											"id": "tsMode",
+											"title": "Input Format",
+											"type": "select",
+											"value": "Current Time [now], Unix Timestamp (seconds) [unix], Unix Timestamp (milliseconds) [unixms], ISO 8601 Date [iso]",
+											"caption": "Select the format of your input."
+										},
+										{
+											"id": "tsSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the timestamp (ignored for 'Current Time')."
+										},
+										{
+											"id": "tsInput",
+											"title": "Input Value",
+											"type": "text",
+											"value": "",
+											"caption": "The timestamp or date to convert (leave empty for 'Current Time')."
+										},
+										{
+											"id": "tsDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "jsonFormatter",
+									"title": "JSON Formatter",
+									"description": "Prettify, minify, or validate JSON data.",
+									"fields": [
+										{
+											"id": "jsonMode",
+											"title": "Mode",
+											"type": "select",
+											"value": "Prettify [prettify], Minify [minify], Validate Only [validate]",
+											"caption": "Choose the operation to perform."
+										},
+										{
+											"id": "jsonSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the JSON."
+										},
+										{
+											"id": "jsonInput",
+											"title": "JSON Input",
+											"type": "textarea",
+											"value": "",
+											"caption": "Paste your JSON here."
+										},
+										{
+											"id": "jsonDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "caseConverter",
+									"title": "String Case Converter",
+									"description": "Convert text between different case formats.",
+									"fields": [
+										{
+											"id": "caseType",
+											"title": "Target Case",
+											"type": "select",
+											"value": "lowercase [lower], UPPERCASE [upper], Title Case [title], Sentence case [sentence], camelCase [camel], PascalCase [pascal], snake_case [snake], kebab-case [kebab], CONSTANT_CASE [constant]",
+											"caption": "Select the target case format."
+										},
+										{
+											"id": "caseSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the text."
+										},
+										{
+											"id": "caseInput",
+											"title": "Input Text",
+											"type": "textarea",
+											"value": "",
+											"caption": "Text to convert."
+										},
+										{
+											"id": "caseDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "colorConverter",
+									"title": "Color Converter",
+									"description": "Convert colors between HEX, RGB, and HSL formats.",
+									"fields": [
+										{
+											"id": "colorInputFormat",
+											"title": "Input Format",
+											"type": "select",
+											"value": "HEX (#RRGGBB) [hex], RGB (r, g, b) [rgb], HSL (h, s%, l%) [hsl]",
+											"caption": "Select the format of your input color."
+										},
+										{
+											"id": "colorSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the color value."
+										},
+										{
+											"id": "colorInput",
+											"title": "Color Value",
+											"type": "text",
+											"value": "",
+											"caption": "Enter color (e.g., #FF5733, rgb(255,87,51), or hsl(11,100%,60%))."
+										},
+										{
+											"id": "colorDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "imageConverter",
+									"title": "Image Converter",
+									"description": "Convert images between formats and resize them.",
+									"fields": [
+										{
+											"id": "imgInput",
+											"title": "Input File",
+											"type": "text",
+											"value": "",
+											"caption": "Path to the input image file."
+										},
+										{
+											"id": "imgOutputFormat",
+											"title": "Output Format",
+											"type": "select",
+											"value": "PNG [png], JPEG [jpg], BMP [bmp], GIF [gif], TIFF [tiff]",
+											"caption": "Select the output image format."
+										},
+										{
+											"id": "imgResize",
+											"title": "Resize Mode",
+											"type": "select",
+											"value": "No Resize [none], By Width (maintain aspect) [width], By Height (maintain aspect) [height], Exact Dimensions [dimensions], By Percentage [percent]",
+											"caption": "How to resize the image."
+										},
+										{
+											"id": "imgWidth",
+											"title": "Width / Percentage",
+											"type": "text",
+											"value": "",
+											"variant": "number",
+											"caption": "Target width in pixels, or percentage for 'By Percentage' mode."
+										},
+										{
+											"id": "imgHeight",
+											"title": "Height",
+											"type": "text",
+											"value": "",
+											"variant": "number",
+											"caption": "Target height in pixels (for 'Exact Dimensions' or 'By Height' mode)."
+										}
+									]
+								},
+								{
+									"id": "slugGenerator",
+									"title": "Slug Generator",
+									"description": "Generate URL-friendly slugs from text.",
+									"fields": [
+										{
+											"id": "slugSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the text."
+										},
+										{
+											"id": "slugInput",
+											"title": "Input Text",
+											"type": "text",
+											"value": "",
+											"caption": "Text to convert to a slug."
+										},
+										{
+											"id": "slugDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										},
+										{
+											"id": "slugSeparator",
+											"title": "Separator",
+											"type": "select",
+											"value": "Hyphen (-) [-], Underscore (_) [_], None []",
+											"caption": "Character to separate words."
+										},
+										{
+											"id": "slugLowercase",
+											"title": "Lowercase",
+											"type": "checkbox",
+											"value": "true",
+											"caption": "Convert to lowercase."
+										},
+										{
+											"id": "slugMaxLength",
+											"title": "Max Length",
+											"type": "text",
+											"value": "",
+											"variant": "number",
+											"caption": "Maximum length of the slug (0 for no limit)."
+										}
+									]
+								},
+								{
+									"id": "textStatistics",
+									"title": "Text Statistics",
+									"description": "Analyze text for word count, reading time, and more.",
+									"fields": [
+										{
+											"id": "statsSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the text."
+										},
+										{
+											"id": "statsInput",
+											"title": "Input Text",
+											"type": "textarea",
+											"value": "",
+											"caption": "Text to analyze."
+										},
+										{
+											"id": "statsDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "creditCardValidator",
+									"title": "Credit Card Validator",
+									"description": "Validate credit card numbers using Luhn algorithm and detect card type.",
+									"fields": [
+										{
+											"id": "ccSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the card number."
+										},
+										{
+											"id": "ccInput",
+											"title": "Card Number",
+											"type": "text",
+											"value": "",
+											"caption": "Credit card number to validate."
+										},
+										{
+											"id": "ccDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "emailValidator",
+									"title": "Email Validator",
+									"description": "Validate email address format and structure.",
+									"fields": [
+										{
+											"id": "emailSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Use job input data [input]",
+											"caption": "Choose where to get the email."
+										},
+										{
+											"id": "emailInput",
+											"title": "Email Address",
+											"type": "text",
+											"value": "",
+											"caption": "Email address to validate."
+										},
+										{
+											"id": "emailDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to the data field. (Used when Data Source is 'input data')"
+										}
+									]
+								},
+								{
+									"id": "syntaxValidator",
+									"title": "Syntax Validator & Formatter",
+									"description": "Validate and format JSON, XML, YAML, Markdown, CSV, TOML, HTML, INI, and Properties files.",
+									"fields": [
+										{
+											"id": "syntaxFormat",
+											"title": "Format",
+											"type": "select",
+											"value": "JSON [json], XML [xml], YAML [yaml], Markdown [markdown], CSV [csv], TOML [toml], HTML [html], INI [ini], Properties [properties]",
+											"caption": "Select the file format to validate."
+										},
+										{
+											"id": "syntaxSource",
+											"title": "Data Source",
+											"type": "select",
+											"value": "Use text field below [field], Load from file [file], Use job input data [input]",
+											"caption": "Choose where to get the content."
+										},
+										{
+											"id": "syntaxInput",
+											"title": "Content",
+											"type": "textarea",
+											"value": "",
+											"caption": "Paste content to validate here."
+										},
+										{
+											"id": "syntaxFilePath",
+											"title": "File Path",
+											"type": "text",
+											"value": "",
+											"caption": "Path to file (when source is 'file')."
+										},
+										{
+											"id": "syntaxDataPath",
+											"title": "Input Data Path",
+											"type": "text",
+											"value": "",
+											"caption": "Dot-notation path to data field (when source is 'input')."
+										},
+										{
+											"id": "syntaxSaveFormatted",
+											"title": "Save Formatted File",
+											"type": "checkbox",
+											"value": false,
+											"caption": "Save a pretty-printed version of the file."
 										}
 									]
 								}

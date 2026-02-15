@@ -1,15 +1,15 @@
 #requires -Version 7.0
+# Copyright (c) 2026 Tim Alderweireldt. All rights reserved.
 <#!
 xyOps Toolbox Event Plugin (PowerShell 7)
 A collection of utility tools for xyOps including:
 - Token Generator
 - UUID Generator (v1, v4, v6, v7, nil, max)
 - Hash Text (MD5, SHA1, SHA256, SHA384, SHA512; others best-effort)
-- QR Code Generator (requires QRCoder.dll next to this script)
+- QR Code Generator (pure PowerShell with Reed-Solomon ECC)
 - Passphrase Generator (uses wordlist.txt if present, otherwise a small fallback list)
 - IBAN Validator
 - Lorem Ipsum Generator
-- ASCII Art (simple boxed text fallback)
 
 I/O contract:
 - Read one JSON object from STDIN (job), write progress/messages as JSON lines of the
@@ -232,9 +232,12 @@ function Format-UUID {
 function Invoke-UUIDGenerator {
   param($Params)
   Write-XYProgress 0.1 'Validating parameters...'
-  $version = (Get-Param $Params 'uuidVersion' 'v4').ToString()
-  $format  = (Get-Param $Params 'uuidFormat' 'standard').ToString()
-  $count   = [Math]::Min(100, [Math]::Max(1, [int](Get-Param $Params 'uuidCount' 1)))
+  $versionRaw = Get-Param $Params 'uuidVersion' 'v4'
+  $version = if ($null -eq $versionRaw) { 'v4' } else { $versionRaw.ToString() }
+  $formatRaw = Get-Param $Params 'uuidFormat' 'standard'
+  $format = if ($null -eq $formatRaw) { 'standard' } else { $formatRaw.ToString() }
+  $countRaw = Get-Param $Params 'uuidCount' 1
+  $count = [Math]::Min(100, [Math]::Max(1, [int]$(if ($null -eq $countRaw) { 1 } else { $countRaw })))
 
   $map = @{ v1 = 'New-UUIDv1'; v4 = 'New-UUIDv4'; v6 = 'New-UUIDv6'; v7 = 'New-UUIDv7'; nil = 'nil'; max = 'max' }
   if (-not $map.ContainsKey($version)) { throw "Unknown UUID version: $version" }
@@ -905,7 +908,7 @@ function Invoke-QRCode {
   Write-XY @{ files = @($filename) }
   Write-XY @{ table = @{ title='QR Code Generated'; header=@('Property','Value'); rows=@(@('Content', $displayContent), @('QR Version', "$version ($qrSize x $qrSize modules)"), @('Image Size',"${actualSize}x${actualSize} pixels"), @('Error Correction',$errorNames[$errorLevel]), @('Colors',"$foreground on $background"), @('File',$filename), @('File Size',"$($fi.Length) bytes")); caption = "QR code saved as $filename (pure PowerShell with Reed-Solomon ECC)" } }
 
-  [pscustomobject]@{ tool='QR Code Generated'; uuids=$uuids; count=$count; version=$version; versionName=$versionNames[$version]; format=$format; formatName=$formatNames[$format] }
+  $result
 }
 
 # ------------------------- Passphrase Generator -------------------------
@@ -959,10 +962,12 @@ function New-Passphrase {
   $pass = ($sel -join $sep)
 
   if ($IncludeNumber) {
-    $num = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32(100)
-    $parts = if ($sep) { $pass.Split($sep) } else { [string[]]$sel }
-    $pos = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($parts.Length + 1)
-    $pass = (@($parts[0..($pos-1)]) + @($num.ToString()) + @($parts[$pos..($parts.Length-1)])) -join $sep
+    $num = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32(100).ToString()
+    $parts = [System.Collections.Generic.List[string]]::new()
+    if ($sep) { $parts.AddRange([string[]]$pass.Split($sep)) } else { $parts.AddRange([string[]]$sel) }
+    $pos = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($parts.Count + 1)
+    $parts.Insert($pos, $num)
+    $pass = $parts -join $sep
   }
   if ($IncludeSymbol) {
     $sym = $PP_SYMBOLS[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32($PP_SYMBOLS.Length)]
@@ -1015,7 +1020,7 @@ function Invoke-PassphraseGenerator {
   $strength = Get-StrengthRating $entropy
 
   $rows = @(); $i=0; foreach ($pp in $list) { $i++; $rows += ,@($i,$pp,$pp.Length) }
-  Write-XY @{ table = @{ title='Generated Passphrases'; header=@('#','Passphrase','Length'); rows=$rows; caption = "${($strength.symbol)} ${($strength.rating)} | $wordCount words | ~${entropy} bits entropy | Word pool: $pool" } }
+  Write-XY @{ table = @{ title='Generated Passphrases'; header=@('#','Passphrase','Length'); rows=$rows; caption = "$($strength.symbol) $($strength.rating) | $wordCount words | ~$entropy bits entropy | Word pool: $pool" } }
 
   [pscustomobject]@{ tool='Passphrase Generator'; passphrases=$list; count=$count; wordCount=$wordCount; maxWordLength=$maxLen; separator=$sep; capitalize=$cap; includeNumber=$incNum; includeSymbol=$incSym; wordPoolSize=$pool; entropy=$entropy; strength=$strength.rating }
 }
@@ -1107,7 +1112,7 @@ function New-LoremParagraph {
 }
 
 function Invoke-LoremIpsum {
-  param($Params)
+  param($Params, [string]$Cwd)
   Write-XYProgress 0.1 'Validating parameters...'
   $paragraphs = [Math]::Min(50, [Math]::Max(1, [int]($Params.loremParagraphs ?? 3)))
   $spp        = [Math]::Min(20, [Math]::Max(1, [int]($Params.loremSentences ?? 4)))
@@ -1118,13 +1123,1384 @@ function Invoke-LoremIpsum {
   Write-XYProgress 0.3 "Generating $paragraphs paragraph(s)..."
   $pars = for ($i=0; $i -lt $paragraphs; $i++) { Write-XYProgress (0.3 + (0.6 * ($i+1) / $paragraphs)) "Generated $($i+1) of $paragraphs paragraphs..."; New-LoremParagraph -SentencesPerParagraph $spp -WordsPerSentence $wps -StartWithLorem $start -IsFirstParagraph:($i -eq 0) }
 
-  Write-XYProgress 0.95 'Finalizing...'
+  Write-XYProgress 0.9 'Saving files...'
   $text = if ($asHtml) { ($pars | ForEach-Object { "<p>$_</p>" }) -join [Environment]::NewLine } else { ($pars -join ([Environment]::NewLine + [Environment]::NewLine)) }
   $totalWords = ($pars | ForEach-Object { ($_ -split '\s+').Length } | Measure-Object -Sum).Sum
   $totalSentences = ($pars | ForEach-Object { ($_ -split '\.').Count - 1 } | Measure-Object -Sum).Sum
 
-  Write-XY @{ text = @{ title='Generated Lorem Ipsum'; content=$text; caption = "${paragraphs} paragraph(s) | ${totalSentences} sentences | ${totalWords} words | ${text.Length} characters$([string]::IsNullOrEmpty(($asHtml)) ? '' : ' (HTML)')" } }
-  [pscustomobject]@{ tool='Lorem Ipsum Generator'; text=$text; paragraphs=$paragraphs; sentencesPerParagraph=$spp; wordsPerSentence=$wps; startWithLorem=$start; asHtml=$asHtml; totalWords=$totalWords; totalSentences=$totalSentences; totalCharacters=$text.Length }
+  # Save as .txt file
+  $txtFilename = 'lorem-ipsum.txt'
+  $txtPath = Join-Path $Cwd $txtFilename
+  [System.IO.File]::WriteAllText($txtPath, $text, [System.Text.Encoding]::UTF8)
+
+  # Save as .md file (with header)
+  $mdFilename = 'lorem-ipsum.md'
+  $mdPath = Join-Path $Cwd $mdFilename
+  $mdContent = "# Lorem Ipsum`n`n$text"
+  [System.IO.File]::WriteAllText($mdPath, $mdContent, [System.Text.Encoding]::UTF8)
+
+  Write-XYProgress 0.95 'Finalizing...'
+
+  # Output files for xyOps download
+  Write-XY @{ files = @($txtFilename, $mdFilename) }
+
+  Write-XY @{ text = @{ title='Generated Lorem Ipsum'; content=$text; caption = "$paragraphs paragraph(s) | $totalSentences sentences | $totalWords words | $($text.Length) characters$(if ($asHtml) { ' (HTML)' } else { '' })" } }
+  [pscustomobject]@{ tool='Lorem Ipsum Generator'; text=$text; paragraphs=$paragraphs; sentencesPerParagraph=$spp; wordsPerSentence=$wps; startWithLorem=$start; asHtml=$asHtml; totalWords=$totalWords; totalSentences=$totalSentences; totalCharacters=$text.Length; files=@($txtFilename, $mdFilename) }
+}
+
+# ------------------------- Base64 Encoder/Decoder -------------------------
+function Invoke-Base64 {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $mode = ($Params.base64Mode ?? 'encode')
+  $source = ($Params.base64Source ?? 'field')
+  $text = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.base64DataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $text = if ($val -is [string]) { $val } else { ($val | ConvertTo-Json -Compress -Depth 20) }
+  } else { $text = ($Params.base64Input ?? '') }
+  
+  if (-not $text) { throw 'No input text provided' }
+  
+  Write-XYProgress 0.5 "$(if ($mode -eq 'encode') { 'Encoding' } else { 'Decoding' }) text..."
+  
+  $output = ''
+  $success = $true
+  $errorMsg = ''
+  
+  try {
+    if ($mode -eq 'encode') {
+      $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+      $output = [Convert]::ToBase64String($bytes)
+    } else {
+      $bytes = [Convert]::FromBase64String($text)
+      $output = [System.Text.Encoding]::UTF8.GetString($bytes)
+    }
+  } catch {
+    $success = $false
+    $errorMsg = $_.Exception.Message
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  if ($success) {
+    Write-XY @{ table = @{ title="Base64 $(if ($mode -eq 'encode') { 'Encoded' } else { 'Decoded' })"; header=@('Property','Value'); rows=@(@('Mode', $(if ($mode -eq 'encode') { 'Encode' } else { 'Decode' })), @('Input Length', "$($text.Length) characters"), @('Output Length', "$($output.Length) characters"), @('Output', $(if ($output.Length -gt 100) { $output.Substring(0,100) + '...' } else { $output }))); caption="Successfully $(if ($mode -eq 'encode') { 'encoded' } else { 'decoded' }) text" } }
+    [pscustomobject]@{ tool='Base64 Encoder/Decoder'; mode=$mode; input=$text; output=$output; inputLength=$text.Length; outputLength=$output.Length; success=$true }
+  } else {
+    Write-XY @{ table = @{ title='Base64 Error'; header=@('Property','Value'); rows=@(@('Mode', $(if ($mode -eq 'encode') { 'Encode' } else { 'Decode' })), @('Error', $errorMsg)); caption='Operation failed' } }
+    [pscustomobject]@{ tool='Base64 Encoder/Decoder'; mode=$mode; input=$text; success=$false; error=$errorMsg }
+  }
+}
+
+# ------------------------- URL Encoder/Decoder -------------------------
+function Invoke-UrlEncode {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $mode = ($Params.urlMode ?? 'encode')
+  $source = ($Params.urlSource ?? 'field')
+  $text = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.urlDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $text = if ($val -is [string]) { $val } else { ($val | ConvertTo-Json -Compress -Depth 20) }
+  } else { $text = ($Params.urlInput ?? '') }
+  
+  if (-not $text) { throw 'No input text provided' }
+  
+  Write-XYProgress 0.5 "$(if ($mode -eq 'encode') { 'Encoding' } else { 'Decoding' }) URL..."
+  
+  $output = if ($mode -eq 'encode') {
+    [System.Uri]::EscapeDataString($text)
+  } else {
+    [System.Uri]::UnescapeDataString($text)
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  Write-XY @{ table = @{ title="URL $(if ($mode -eq 'encode') { 'Encoded' } else { 'Decoded' })"; header=@('Property','Value'); rows=@(@('Mode', $(if ($mode -eq 'encode') { 'Encode' } else { 'Decode' })), @('Input', $(if ($text.Length -gt 80) { $text.Substring(0,80) + '...' } else { $text })), @('Output', $(if ($output.Length -gt 80) { $output.Substring(0,80) + '...' } else { $output }))); caption="Successfully $(if ($mode -eq 'encode') { 'encoded' } else { 'decoded' }) URL" } }
+  [pscustomobject]@{ tool='URL Encoder/Decoder'; mode=$mode; input=$text; output=$output; inputLength=$text.Length; outputLength=$output.Length }
+}
+
+# ------------------------- Timestamp Converter -------------------------
+function Invoke-TimestampConverter {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $mode = ($Params.tsMode ?? 'now')
+  $source = ($Params.tsSource ?? 'field')
+  $inputValue = ''
+  
+  if ($mode -ne 'now') {
+    if ($source -eq 'input') {
+      $inputData = $JobInput.data
+      if (-not $inputData) { throw 'No input data available from previous job' }
+      $path = ($Params.tsDataPath ?? '')
+      $val = Get-NestedValue $inputData $path
+      if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+      $inputValue = [string]$val
+    } else { $inputValue = ($Params.tsInput ?? '') }
+  }
+  
+  Write-XYProgress 0.5 'Converting timestamp...'
+  
+  $dt = $null
+  $parseError = ''
+  
+  switch ($mode) {
+    'now' { $dt = [DateTimeOffset]::UtcNow }
+    'unix' {
+      try {
+        $unixSeconds = [long]$inputValue
+        $dt = [DateTimeOffset]::FromUnixTimeSeconds($unixSeconds)
+      } catch { $parseError = "Invalid Unix timestamp: $inputValue" }
+    }
+    'unixms' {
+      try {
+        $unixMs = [long]$inputValue
+        $dt = [DateTimeOffset]::FromUnixTimeMilliseconds($unixMs)
+      } catch { $parseError = "Invalid Unix milliseconds timestamp: $inputValue" }
+    }
+    'iso' {
+      try {
+        $dt = [DateTimeOffset]::Parse($inputValue)
+      } catch { $parseError = "Invalid ISO 8601 date: $inputValue" }
+    }
+    default { $parseError = "Unknown mode: $mode" }
+  }
+  
+  if ($parseError) { throw $parseError }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  $unixSec = $dt.ToUnixTimeSeconds()
+  $unixMs = $dt.ToUnixTimeMilliseconds()
+  $iso = $dt.ToString('yyyy-MM-ddTHH:mm:ss.fffzzz')
+  $isoUtc = $dt.UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+  $human = $dt.ToString('dddd, MMMM d, yyyy h:mm:ss tt')
+  $humanUtc = $dt.UtcDateTime.ToString('dddd, MMMM d, yyyy h:mm:ss tt') + ' UTC'
+  
+  $rows = @(
+    @('Unix Timestamp (seconds)', $unixSec.ToString()),
+    @('Unix Timestamp (milliseconds)', $unixMs.ToString()),
+    @('ISO 8601', $iso),
+    @('ISO 8601 (UTC)', $isoUtc),
+    @('Human Readable', $human),
+    @('Human Readable (UTC)', $humanUtc)
+  )
+  
+  Write-XY @{ table = @{ title='Timestamp Conversion'; header=@('Format','Value'); rows=$rows; caption="Converted from $(if ($mode -eq 'now') { 'current time' } else { $mode })" } }
+  [pscustomobject]@{ tool='Timestamp Converter'; mode=$mode; input=$(if ($mode -eq 'now') { 'now' } else { $inputValue }); unixSeconds=$unixSec; unixMilliseconds=$unixMs; iso8601=$iso; iso8601Utc=$isoUtc; humanReadable=$human; humanReadableUtc=$humanUtc }
+}
+
+# ------------------------- JSON Formatter -------------------------
+function Invoke-JsonFormatter {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $mode = ($Params.jsonMode ?? 'prettify')
+  $source = ($Params.jsonSource ?? 'field')
+  $text = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.jsonDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $text = if ($val -is [string]) { $val } else { ($val | ConvertTo-Json -Compress -Depth 20) }
+  } else { $text = ($Params.jsonInput ?? '') }
+  
+  if (-not $text) { throw 'No JSON input provided' }
+  
+  Write-XYProgress 0.5 'Processing JSON...'
+  
+  $parsed = $null
+  $output = ''
+  $valid = $true
+  $errorMsg = ''
+  
+  try {
+    $parsed = $text | ConvertFrom-Json -ErrorAction Stop
+    $output = switch ($mode) {
+      'prettify' { $parsed | ConvertTo-Json -Depth 20 }
+      'minify'   { $parsed | ConvertTo-Json -Depth 20 -Compress }
+      'validate' { $parsed | ConvertTo-Json -Depth 20 }
+    }
+  } catch {
+    $valid = $false
+    $errorMsg = $_.Exception.Message
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  $modeNames = @{ prettify='Prettify'; minify='Minify'; validate='Validate' }
+  
+  if ($valid) {
+    $preview = if ($output.Length -gt 200) { $output.Substring(0,200) + '...' } else { $output }
+    Write-XY @{ table = @{ title='JSON Result'; header=@('Property','Value'); rows=@(@('Mode', $modeNames[$mode]), @('Valid', '✓ Yes'), @('Input Size', "$($text.Length) chars"), @('Output Size', "$($output.Length) chars")); caption='JSON is valid' } }
+    Write-XY @{ text = @{ title='Output'; content=$preview; caption='' } }
+    [pscustomobject]@{ tool='JSON Formatter'; mode=$mode; valid=$true; input=$text; output=$output; inputLength=$text.Length; outputLength=$output.Length }
+  } else {
+    Write-XY @{ table = @{ title='JSON Result'; header=@('Property','Value'); rows=@(@('Mode', $modeNames[$mode]), @('Valid', '✗ No'), @('Error', $errorMsg)); caption='JSON is invalid' } }
+    [pscustomobject]@{ tool='JSON Formatter'; mode=$mode; valid=$false; error=$errorMsg }
+  }
+}
+
+# ------------------------- String Case Converter -------------------------
+function Invoke-CaseConverter {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $targetCase = ($Params.caseType ?? 'lower')
+  $source = ($Params.caseSource ?? 'field')
+  $text = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.caseDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $text = if ($val -is [string]) { $val } else { ($val | ConvertTo-Json -Compress -Depth 20) }
+  } else { $text = ($Params.caseInput ?? '') }
+  
+  if (-not $text) { throw 'No input text provided' }
+  
+  Write-XYProgress 0.5 'Converting case...'
+  
+  $output = switch ($targetCase) {
+    'lower'     { $text.ToLowerInvariant() }
+    'upper'     { $text.ToUpperInvariant() }
+    'title'     { (Get-Culture).TextInfo.ToTitleCase($text.ToLower()) }
+    'sentence'  { if ($text.Length -gt 0) { $text.Substring(0,1).ToUpper() + $text.Substring(1).ToLower() } else { '' } }
+    'camel'     { $words = $text -split '[\s_-]+'; $first = $true; ($words | ForEach-Object { if ($first) { $first = $false; $_.ToLower() } else { (Get-Culture).TextInfo.ToTitleCase($_.ToLower()) } }) -join '' }
+    'pascal'    { $words = $text -split '[\s_-]+'; ($words | ForEach-Object { (Get-Culture).TextInfo.ToTitleCase($_.ToLower()) }) -join '' }
+    'snake'     { ($text -creplace '([A-Z])', '_$1' -replace '[\s-]+', '_').ToLower().Trim('_') -replace '__+', '_' }
+    'kebab'     { ($text -creplace '([A-Z])', '-$1' -replace '[\s_]+', '-').ToLower().Trim('-') -replace '--+', '-' }
+    'constant'  { ($text -creplace '([A-Z])', '_$1' -replace '[\s-]+', '_').ToUpper().Trim('_') -replace '__+', '_' }
+    default     { $text }
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  $caseNames = @{ lower='lowercase'; upper='UPPERCASE'; title='Title Case'; sentence='Sentence case'; camel='camelCase'; pascal='PascalCase'; snake='snake_case'; kebab='kebab-case'; constant='CONSTANT_CASE' }
+  
+  Write-XY @{ table = @{ title='Case Conversion'; header=@('Property','Value'); rows=@(@('Target Case', $caseNames[$targetCase]), @('Input', $(if ($text.Length -gt 50) { $text.Substring(0,50) + '...' } else { $text })), @('Output', $(if ($output.Length -gt 50) { $output.Substring(0,50) + '...' } else { $output }))); caption="Converted to $($caseNames[$targetCase])" } }
+  [pscustomobject]@{ tool='String Case Converter'; targetCase=$targetCase; input=$text; output=$output }
+}
+
+# ------------------------- Color Converter -------------------------
+function Invoke-ColorConverter {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $inputFormat = ($Params.colorInputFormat ?? 'hex')
+  $source = ($Params.colorSource ?? 'field')
+  $colorInput = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.colorDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $colorInput = [string]$val
+  } else { $colorInput = ($Params.colorInput ?? '') }
+  
+  if (-not $colorInput) { throw 'No color input provided' }
+  
+  Write-XYProgress 0.5 'Converting color...'
+  
+  $r = 0; $g = 0; $b = 0
+  
+  switch ($inputFormat) {
+    'hex' {
+      $hex = $colorInput -replace '^#', ''
+      if ($hex.Length -eq 3) { $hex = "$($hex[0])$($hex[0])$($hex[1])$($hex[1])$($hex[2])$($hex[2])" }
+      if ($hex.Length -ne 6) { throw "Invalid HEX color: $colorInput" }
+      $r = [Convert]::ToInt32($hex.Substring(0,2), 16)
+      $g = [Convert]::ToInt32($hex.Substring(2,2), 16)
+      $b = [Convert]::ToInt32($hex.Substring(4,2), 16)
+    }
+    'rgb' {
+      $match = [regex]::Match($colorInput, 'rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)')
+      if (-not $match.Success) {
+        $parts = $colorInput -split '[,\s]+' | Where-Object { $_ -match '^\d+$' }
+        if ($parts.Count -ge 3) { $r = [int]$parts[0]; $g = [int]$parts[1]; $b = [int]$parts[2] }
+        else { throw "Invalid RGB color: $colorInput" }
+      } else {
+        $r = [int]$match.Groups[1].Value; $g = [int]$match.Groups[2].Value; $b = [int]$match.Groups[3].Value
+      }
+    }
+    'hsl' {
+      $match = [regex]::Match($colorInput, 'hsl\s*\(\s*([\d.]+)\s*,\s*([\d.]+)%?\s*,\s*([\d.]+)%?\s*\)')
+      if (-not $match.Success) {
+        $parts = $colorInput -split '[,\s]+' | Where-Object { $_ -match '^[\d.]+' }
+        if ($parts.Count -ge 3) { $h = [double]($parts[0] -replace '%',''); $s = [double]($parts[1] -replace '%','')/100; $l = [double]($parts[2] -replace '%','')/100 }
+        else { throw "Invalid HSL color: $colorInput" }
+      } else {
+        $h = [double]$match.Groups[1].Value; $s = [double]$match.Groups[2].Value/100; $l = [double]$match.Groups[3].Value/100
+      }
+      # HSL to RGB conversion
+      if ($s -eq 0) { $r = $g = $b = [int]($l * 255) }
+      else {
+        $hueToRgb = { param($p, $q, $t) if ($t -lt 0) { $t += 1 }; if ($t -gt 1) { $t -= 1 }; if ($t -lt 1/6) { return $p + ($q - $p) * 6 * $t }; if ($t -lt 1/2) { return $q }; if ($t -lt 2/3) { return $p + ($q - $p) * (2/3 - $t) * 6 }; return $p }
+        $q = if ($l -lt 0.5) { $l * (1 + $s) } else { $l + $s - $l * $s }
+        $p = 2 * $l - $q
+        $r = [int]([Math]::Round((& $hueToRgb $p $q ($h/360 + 1/3)) * 255))
+        $g = [int]([Math]::Round((& $hueToRgb $p $q ($h/360)) * 255))
+        $b = [int]([Math]::Round((& $hueToRgb $p $q ($h/360 - 1/3)) * 255))
+      }
+    }
+  }
+  
+  $r = [Math]::Max(0, [Math]::Min(255, $r)); $g = [Math]::Max(0, [Math]::Min(255, $g)); $b = [Math]::Max(0, [Math]::Min(255, $b))
+  
+  # Convert to all formats
+  $hex = '#{0:X2}{1:X2}{2:X2}' -f $r, $g, $b
+  $rgb = "rgb($r, $g, $b)"
+  $maxC = [Math]::Max($r, [Math]::Max($g, $b)) / 255; $minC = [Math]::Min($r, [Math]::Min($g, $b)) / 255
+  $l = ($maxC + $minC) / 2; $s = 0; $h = 0
+  if ($maxC -ne $minC) {
+    $d = $maxC - $minC
+    $s = if ($l -gt 0.5) { $d / (2 - $maxC - $minC) } else { $d / ($maxC + $minC) }
+    $rn = $r/255; $gn = $g/255; $bn = $b/255
+    if ($rn -eq $maxC) { $h = (($gn - $bn) / $d + $(if ($gn -lt $bn) { 6 } else { 0 })) * 60 }
+    elseif ($gn -eq $maxC) { $h = (($bn - $rn) / $d + 2) * 60 }
+    else { $h = (($rn - $gn) / $d + 4) * 60 }
+  }
+  $hsl = "hsl($([Math]::Round($h)), $([Math]::Round($s * 100))%, $([Math]::Round($l * 100))%)"
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  Write-XY @{ table = @{ title='Color Conversion'; header=@('Format','Value'); rows=@(@('HEX', $hex), @('RGB', $rgb), @('HSL', $hsl), @('Red', $r), @('Green', $g), @('Blue', $b)); caption="Converted from $inputFormat" } }
+  [pscustomobject]@{ tool='Color Converter'; inputFormat=$inputFormat; input=$colorInput; hex=$hex; rgb=$rgb; hsl=$hsl; red=$r; green=$g; blue=$b }
+}
+
+# ------------------------- Image Converter -------------------------
+function Invoke-ImageConverter {
+  param($Params, [string]$Cwd)
+  Write-XYProgress 0.1 'Validating parameters...'
+  
+  $inputFile = ($Params.imgInput ?? '')
+  $outputFormat = ($Params.imgOutputFormat ?? 'png')
+  $resize = ($Params.imgResize ?? 'none')
+  $width = [int]($Params.imgWidth ?? 0)
+  $height = [int]($Params.imgHeight ?? 0)
+  
+  if (-not $inputFile) { throw 'No input file specified' }
+  
+  $inputPath = if ([System.IO.Path]::IsPathRooted($inputFile)) { $inputFile } else { Join-Path $Cwd $inputFile }
+  if (-not (Test-Path $inputPath)) { throw "Input file not found: $inputFile" }
+  
+  Write-XYProgress 0.3 'Loading image...'
+  
+  # Load image using .NET
+  Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+  $img = [System.Drawing.Image]::FromFile($inputPath)
+  $origWidth = $img.Width; $origHeight = $img.Height
+  
+  Write-XYProgress 0.5 'Processing image...'
+  
+  $newWidth = $origWidth; $newHeight = $origHeight
+  
+  if ($resize -eq 'dimensions' -and $width -gt 0 -and $height -gt 0) {
+    $newWidth = $width; $newHeight = $height
+  } elseif ($resize -eq 'width' -and $width -gt 0) {
+    $newWidth = $width; $newHeight = [int]($origHeight * ($width / $origWidth))
+  } elseif ($resize -eq 'height' -and $height -gt 0) {
+    $newHeight = $height; $newWidth = [int]($origWidth * ($height / $origHeight))
+  } elseif ($resize -eq 'percent' -and $width -gt 0) {
+    $scale = $width / 100; $newWidth = [int]($origWidth * $scale); $newHeight = [int]($origHeight * $scale)
+  }
+  
+  $outputImg = $img
+  if ($newWidth -ne $origWidth -or $newHeight -ne $origHeight) {
+    $outputImg = New-Object System.Drawing.Bitmap($newWidth, $newHeight)
+    $graphics = [System.Drawing.Graphics]::FromImage($outputImg)
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.DrawImage($img, 0, 0, $newWidth, $newHeight)
+    $graphics.Dispose()
+  }
+  
+  Write-XYProgress 0.8 'Saving image...'
+  
+  $baseName = [System.IO.Path]::GetFileNameWithoutExtension($inputFile)
+  $outputFile = "$baseName-converted.$outputFormat"
+  $outputPath = Join-Path $Cwd $outputFile
+  
+  $format = switch ($outputFormat) {
+    'png'  { [System.Drawing.Imaging.ImageFormat]::Png }
+    'jpg'  { [System.Drawing.Imaging.ImageFormat]::Jpeg }
+    'jpeg' { [System.Drawing.Imaging.ImageFormat]::Jpeg }
+    'bmp'  { [System.Drawing.Imaging.ImageFormat]::Bmp }
+    'gif'  { [System.Drawing.Imaging.ImageFormat]::Gif }
+    'tiff' { [System.Drawing.Imaging.ImageFormat]::Tiff }
+    default { [System.Drawing.Imaging.ImageFormat]::Png }
+  }
+  
+  $outputImg.Save($outputPath, $format)
+  $fileInfo = Get-Item $outputPath
+  
+  if ($outputImg -ne $img) { $outputImg.Dispose() }
+  $img.Dispose()
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  Write-XY @{ files = @($outputFile) }
+  Write-XY @{ table = @{ title='Image Converted'; header=@('Property','Value'); rows=@(@('Input File', $inputFile), @('Output File', $outputFile), @('Original Size', "${origWidth}x${origHeight}"), @('New Size', "${newWidth}x${newHeight}"), @('Output Format', $outputFormat.ToUpper()), @('File Size', "$($fileInfo.Length) bytes")); caption="Image converted to $($outputFormat.ToUpper())" } }
+  [pscustomobject]@{ tool='Image Converter'; inputFile=$inputFile; outputFile=$outputFile; originalWidth=$origWidth; originalHeight=$origHeight; newWidth=$newWidth; newHeight=$newHeight; outputFormat=$outputFormat; fileSize=$fileInfo.Length }
+}
+
+# ------------------------- Slug Generator -------------------------
+function Invoke-SlugGenerator {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $source = ($Params.slugSource ?? 'field')
+  $separator = ($Params.slugSeparator ?? '-')
+  $lowercase = ($Params.slugLowercase ?? 'true') -eq 'true'
+  $maxLength = [int]($Params.slugMaxLength ?? 0)
+  $text = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.slugDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $text = [string]$val
+  } else { $text = ($Params.slugInput ?? '') }
+  
+  if (-not $text) { throw 'No input text provided' }
+  
+  Write-XYProgress 0.5 'Generating slug...'
+  
+  # Normalize unicode and remove diacritics
+  $normalized = $text.Normalize([System.Text.NormalizationForm]::FormD)
+  $slug = ($normalized -replace '\p{M}', '').Trim()
+  
+  # Replace non-alphanumeric with separator
+  $slug = $slug -replace '[^a-zA-Z0-9]+', $separator
+  $slug = $slug.Trim($separator)
+  
+  # Remove consecutive separators
+  $slug = $slug -replace "[$separator]+", $separator
+  
+  if ($lowercase) { $slug = $slug.ToLowerInvariant() }
+  if ($maxLength -gt 0 -and $slug.Length -gt $maxLength) {
+    $slug = $slug.Substring(0, $maxLength).TrimEnd($separator)
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  Write-XY @{ table = @{ title='Slug Generated'; header=@('Property','Value'); rows=@(@('Input', $(if ($text.Length -gt 50) { $text.Substring(0,50) + '...' } else { $text })), @('Slug', $slug), @('Separator', $separator), @('Lowercase', $(if ($lowercase) { 'Yes' } else { 'No' })), @('Length', $slug.Length)); caption='URL-safe slug generated' } }
+  [pscustomobject]@{ tool='Slug Generator'; input=$text; slug=$slug; separator=$separator; lowercase=$lowercase; length=$slug.Length }
+}
+
+# ------------------------- Text Statistics -------------------------
+function Invoke-TextStatistics {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $source = ($Params.statsSource ?? 'field')
+  $text = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.statsDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $text = if ($val -is [string]) { $val } else { ($val | ConvertTo-Json -Compress -Depth 20) }
+  } else { $text = ($Params.statsInput ?? '') }
+  
+  if (-not $text) { throw 'No input text provided' }
+  
+  Write-XYProgress 0.5 'Analyzing text...'
+  
+  $charCount = $text.Length
+  $charNoSpaces = ($text -replace '\s', '').Length
+  $words = @($text -split '\s+' | Where-Object { $_.Length -gt 0 })
+  $wordCount = $words.Count
+  $lines = @($text -split "`n")
+  $lineCount = $lines.Count
+  $sentences = @($text -split '[.!?]+' | Where-Object { $_.Trim().Length -gt 0 })
+  $sentenceCount = $sentences.Count
+  $paragraphs = @($text -split "`n\s*`n" | Where-Object { $_.Trim().Length -gt 0 })
+  $paragraphCount = $paragraphs.Count
+  
+  # Average word length
+  $avgWordLength = if ($wordCount -gt 0) { [Math]::Round(($words | ForEach-Object { $_.Length } | Measure-Object -Average).Average, 1) } else { 0 }
+  
+  # Reading time (200 words/minute)
+  $readingMinutes = [Math]::Ceiling($wordCount / 200)
+  
+  # Speaking time (150 words/minute)
+  $speakingMinutes = [Math]::Ceiling($wordCount / 150)
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  Write-XY @{ table = @{ title='Text Statistics'; header=@('Metric','Value'); rows=@(@('Characters', $charCount), @('Characters (no spaces)', $charNoSpaces), @('Words', $wordCount), @('Sentences', $sentenceCount), @('Paragraphs', $paragraphCount), @('Lines', $lineCount), @('Avg Word Length', "$avgWordLength chars"), @('Reading Time', "~$readingMinutes min"), @('Speaking Time', "~$speakingMinutes min")); caption='Text analysis complete' } }
+  [pscustomobject]@{ tool='Text Statistics'; characters=$charCount; charactersNoSpaces=$charNoSpaces; words=$wordCount; sentences=$sentenceCount; paragraphs=$paragraphCount; lines=$lineCount; avgWordLength=$avgWordLength; readingMinutes=$readingMinutes; speakingMinutes=$speakingMinutes }
+}
+
+# ------------------------- Credit Card Validator -------------------------
+function Invoke-CreditCardValidator {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $source = ($Params.ccSource ?? 'field')
+  $cardNumber = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.ccDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $cardNumber = [string]$val
+  } else { $cardNumber = ($Params.ccInput ?? '') }
+  
+  if (-not $cardNumber) { throw 'No card number provided' }
+  
+  Write-XYProgress 0.5 'Validating card...'
+  
+  # Remove spaces, dashes
+  $cleaned = $cardNumber -replace '[\s-]', ''
+  
+  # Check if numeric only
+  if ($cleaned -notmatch '^\d+$') { throw 'Card number must contain only digits' }
+  
+  # Luhn algorithm validation
+  $digits = $cleaned.ToCharArray() | ForEach-Object { [int]::Parse($_) }
+  $sum = 0; $alt = $false
+  for ($i = $digits.Length - 1; $i -ge 0; $i--) {
+    $d = $digits[$i]
+    if ($alt) { $d *= 2; if ($d -gt 9) { $d -= 9 } }
+    $sum += $d; $alt = -not $alt
+  }
+  $isValid = ($sum % 10) -eq 0
+  
+  # Detect card type by prefix and length
+  $cardType = 'Unknown'
+  $len = $cleaned.Length
+  if ($cleaned -match '^4' -and ($len -eq 13 -or $len -eq 16 -or $len -eq 19)) { $cardType = 'Visa' }
+  elseif ($cleaned -match '^5[1-5]' -and $len -eq 16) { $cardType = 'Mastercard' }
+  elseif ($cleaned -match '^(34|37)' -and $len -eq 15) { $cardType = 'American Express' }
+  elseif ($cleaned -match '^6(?:011|5)' -and $len -eq 16) { $cardType = 'Discover' }
+  elseif ($cleaned -match '^3(?:0[0-5]|[68])' -and ($len -eq 14 -or $len -eq 16)) { $cardType = "Diners Club" }
+  elseif ($cleaned -match '^35(?:2[89]|[3-8])' -and ($len -ge 16 -and $len -le 19)) { $cardType = 'JCB' }
+  elseif ($cleaned -match '^62' -and $len -eq 16) { $cardType = 'UnionPay' }
+  
+  # Mask card number
+  $masked = if ($len -ge 8) { $cleaned.Substring(0,4) + ('*' * ($len - 8)) + $cleaned.Substring($len - 4) } else { '*' * $len }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  $validText = if ($isValid) { '✓ Valid (Luhn check passed)' } else { '✗ Invalid (Luhn check failed)' }
+  Write-XY @{ table = @{ title='Credit Card Validation'; header=@('Property','Value'); rows=@(@('Masked Number', $masked), @('Card Type', $cardType), @('Valid', $validText), @('Length', $len)); caption=$(if ($isValid) { 'Card number is valid' } else { 'Card number is invalid' }) } }
+  [pscustomobject]@{ tool='Credit Card Validator'; maskedNumber=$masked; cardType=$cardType; valid=$isValid; length=$len }
+}
+
+# ------------------------- Email Validator -------------------------
+function Invoke-EmailValidator {
+  param($Params, $JobInput)
+  Write-XYProgress 0.1 'Validating parameters...'
+  $source = ($Params.emailSource ?? 'field')
+  $email = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $path = ($Params.emailDataPath ?? '')
+    $val = Get-NestedValue $inputData $path
+    if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+    $email = [string]$val
+  } else { $email = ($Params.emailInput ?? '') }
+  
+  if (-not $email) { throw 'No email address provided' }
+  
+  Write-XYProgress 0.5 'Validating email...'
+  
+  $email = $email.Trim()
+  $isValid = $false; $localPart = ''; $domain = ''; $tld = ''
+  $issues = [System.Collections.Generic.List[string]]::new()
+  
+  # RFC 5322 simplified regex
+  $emailRegex = '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'
+  
+  if ($email -match '@') {
+    $parts = $email -split '@'
+    if ($parts.Count -eq 2) {
+      $localPart = $parts[0]; $domain = $parts[1]
+      if ($domain -match '\.([a-zA-Z]{2,})$') { $tld = $Matches[1] }
+    }
+  }
+  
+  if ($email -match $emailRegex) {
+    $isValid = $true
+    if ($localPart.Length -gt 64) { $issues.Add('Local part exceeds 64 chars'); $isValid = $false }
+    if ($domain.Length -gt 253) { $issues.Add('Domain exceeds 253 chars'); $isValid = $false }
+    if ($localPart.StartsWith('.') -or $localPart.EndsWith('.')) { $issues.Add('Local part starts/ends with dot'); $isValid = $false }
+    if ($localPart -match '\.\.') { $issues.Add('Local part has consecutive dots'); $isValid = $false }
+  } else {
+    if (-not ($email -match '@')) { $issues.Add('Missing @ symbol') }
+    elseif ($parts.Count -ne 2) { $issues.Add('Multiple @ symbols') }
+    elseif (-not $localPart) { $issues.Add('Empty local part') }
+    elseif (-not $domain) { $issues.Add('Empty domain') }
+    elseif (-not ($domain -match '\.')) { $issues.Add('Domain missing TLD') }
+    else { $issues.Add('Invalid format') }
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  $validText = if ($isValid) { '✓ Valid' } else { '✗ Invalid' }
+  $issueText = if ($issues.Count -gt 0) { $issues -join '; ' } else { 'None' }
+  Write-XY @{ table = @{ title='Email Validation'; header=@('Property','Value'); rows=@(@('Email', $email), @('Valid', $validText), @('Local Part', $(if ($localPart) { $localPart } else { 'N/A' })), @('Domain', $(if ($domain) { $domain } else { 'N/A' })), @('TLD', $(if ($tld) { $tld } else { 'N/A' })), @('Issues', $issueText)); caption=$(if ($isValid) { 'Email address is valid' } else { 'Email address is invalid' }) } }
+  [pscustomobject]@{ tool='Email Validator'; email=$email; valid=$isValid; localPart=$localPart; domain=$domain; tld=$tld; issues=$issues.ToArray() }
+}
+
+
+# ------------------------- Barcode Generator -------------------------
+function Invoke-BarcodeGenerator {
+  param($Params, [string]$Cwd)
+  Write-XYProgress 0.1 'Validating parameters...'
+  
+  $barcodeType = ($Params.barcodeType ?? 'code128')
+  $text = ($Params.barcodeText ?? '')
+  
+  if (-not $text) { throw 'No barcode text provided' }
+  
+  Write-XYProgress 0.5 'Generating barcode...'
+  
+  $svg = ''
+  $filename = "barcode-$barcodeType.svg"
+  
+  switch ($barcodeType) {
+    'code128' {
+      # Code 128 encoding (subset B for printable ASCII) - use case-sensitive hashtable
+      $patterns = [System.Collections.Hashtable]::new([StringComparer]::Ordinal)
+      # Special characters and numbers
+      $patterns[' ']='11011001100'; $patterns['!']='11001101100'; $patterns['"']='11001100110'
+      $patterns['#']='10010011000'; $patterns['$']='10010001100'; $patterns['%']='10001001100'
+      $patterns['&']='10011001000'; $patterns["'"]='10011000100'; $patterns['(']='10001100100'
+      $patterns[')']='11001001000'; $patterns['*']='11001000100'; $patterns['+']='11000100100'
+      $patterns[',']='10110011100'; $patterns['-']='10011011100'; $patterns['.']='10011001110'
+      $patterns['/']='10111001100'; $patterns['0']='10011101100'; $patterns['1']='10011100110'
+      $patterns['2']='11001110010'; $patterns['3']='11001011100'; $patterns['4']='11001001110'
+      $patterns['5']='11011100100'; $patterns['6']='11001110100'; $patterns['7']='11101101110'
+      $patterns['8']='11101001100'; $patterns['9']='11100101100'; $patterns[':']='11100100110'
+      $patterns[';']='11101100100'; $patterns['<']='11100110100'; $patterns['=']='11100110010'
+      $patterns['>']='11011011000'; $patterns['?']='11011000110'; $patterns['@']='11000110110'
+      # Uppercase letters
+      $patterns['A']='10100011000'; $patterns['B']='10001011000'; $patterns['C']='10001000110'
+      $patterns['D']='10110001000'; $patterns['E']='10001101000'; $patterns['F']='10001100010'
+      $patterns['G']='11010001000'; $patterns['H']='11000101000'; $patterns['I']='11000100010'
+      $patterns['J']='10110111000'; $patterns['K']='10110001110'; $patterns['L']='10001101110'
+      $patterns['M']='10111011000'; $patterns['N']='10111000110'; $patterns['O']='10001110110'
+      $patterns['P']='11101110110'; $patterns['Q']='11010001110'; $patterns['R']='11000101110'
+      $patterns['S']='11011101000'; $patterns['T']='11011100010'; $patterns['U']='11011101110'
+      $patterns['V']='11101011000'; $patterns['W']='11101000110'; $patterns['X']='11100010110'
+      $patterns['Y']='11101101000'; $patterns['Z']='11101100010'; $patterns['[']='11100011010'
+      $patterns['\']='11101111010'; $patterns[']']='11001000010'; $patterns['^']='11110001010'
+      $patterns['_']='10100110000'; $patterns['`']='10100001100'
+      # Lowercase letters
+      $patterns['a']='10010110000'; $patterns['b']='10010000110'; $patterns['c']='10000101100'
+      $patterns['d']='10000100110'; $patterns['e']='10110010000'; $patterns['f']='10110000100'
+      $patterns['g']='10011010000'; $patterns['h']='10011000010'; $patterns['i']='10000110100'
+      $patterns['j']='10000110010'; $patterns['k']='11000010010'; $patterns['l']='11001010000'
+      $patterns['m']='11110111010'; $patterns['n']='11000010100'; $patterns['o']='10001111010'
+      $patterns['p']='10100111100'; $patterns['q']='10010111100'; $patterns['r']='10010011110'
+      $patterns['s']='10111100100'; $patterns['t']='10011110100'; $patterns['u']='10011110010'
+      $patterns['v']='11110100100'; $patterns['w']='11110010100'; $patterns['x']='11110010010'
+      $patterns['y']='11011011110'; $patterns['z']='11011110110'; $patterns['{']='11110110110'
+      $patterns['|']='10101111000'; $patterns['}']='10100011110'; $patterns['~']='10001011110'
+      $startB = '11010010000'; $stop = '1100011101011'
+      $checksum = 104 # Start B value
+      $encoded = $startB
+      for ($i = 0; $i -lt $text.Length; $i++) {
+        $c = $text[$i]
+        if ($patterns.ContainsKey([string]$c)) {
+          $encoded += $patterns[[string]$c]
+          $val = [int][char]$c - 32
+          $checksum += $val * ($i + 1)
+        }
+      }
+      $checkVal = $checksum % 103
+      $checkChar = [char]($checkVal + 32)
+      if ($patterns.ContainsKey([string]$checkChar)) { $encoded += $patterns[[string]$checkChar] }
+      $encoded += $stop
+      
+      # Generate SVG
+      $barWidth = 2; $height = 80; $width = $encoded.Length * $barWidth + 20
+      $svg = "<svg xmlns='http://www.w3.org/2000/svg' width='$width' height='$($height + 30)' viewBox='0 0 $width $($height + 30)'>"
+      $svg += "<rect width='100%' height='100%' fill='white'/>"
+      $x = 10
+      foreach ($bit in $encoded.ToCharArray()) {
+        if ($bit -eq '1') { $svg += "<rect x='$x' y='10' width='$barWidth' height='$height' fill='black'/>" }
+        $x += $barWidth
+      }
+      $svg += "<text x='$($width/2)' y='$($height + 25)' text-anchor='middle' font-family='monospace' font-size='12'>$([System.Security.SecurityElement]::Escape($text))</text>"
+      $svg += "</svg>"
+    }
+    'code39' {
+      $patterns = @{
+        '0'='101001101101'; '1'='110100101011'; '2'='101100101011'; '3'='110110010101'; '4'='101001101011'
+        '5'='110100110101'; '6'='101100110101'; '7'='101001011011'; '8'='110100101101'; '9'='101100101101'
+        'A'='110101001011'; 'B'='101101001011'; 'C'='110110100101'; 'D'='101011001011'; 'E'='110101100101'
+        'F'='101101100101'; 'G'='101010011011'; 'H'='110101001101'; 'I'='101101001101'; 'J'='101011001101'
+        'K'='110101010011'; 'L'='101101010011'; 'M'='110110101001'; 'N'='101011010011'; 'O'='110101101001'
+        'P'='101101101001'; 'Q'='101010110011'; 'R'='110101011001'; 'S'='101101011001'; 'T'='101011011001'
+        'U'='110010101011'; 'V'='100110101011'; 'W'='110011010101'; 'X'='100101101011'; 'Y'='110010110101'
+        'Z'='100110110101'; '-'='100101011011'; '.'='110010101101'; ' '='100110101101'; '*'='100101101101'
+        '$'='100100100101'; '/'='100100101001'; '+'='100101001001'; '%'='101001001001'
+      }
+      $textUpper = "*$($text.ToUpper())*"
+      $encoded = ''
+      foreach ($c in $textUpper.ToCharArray()) {
+        if ($patterns.ContainsKey([string]$c)) { $encoded += $patterns[[string]$c] + '0' }
+      }
+      
+      $barWidth = 2; $height = 80; $width = $encoded.Length * $barWidth + 20
+      $svg = "<svg xmlns='http://www.w3.org/2000/svg' width='$width' height='$($height + 30)' viewBox='0 0 $width $($height + 30)'>"
+      $svg += "<rect width='100%' height='100%' fill='white'/>"
+      $x = 10
+      foreach ($bit in $encoded.ToCharArray()) {
+        if ($bit -eq '1') { $svg += "<rect x='$x' y='10' width='$barWidth' height='$height' fill='black'/>" }
+        $x += $barWidth
+      }
+      $svg += "<text x='$($width/2)' y='$($height + 25)' text-anchor='middle' font-family='monospace' font-size='12'>$([System.Security.SecurityElement]::Escape($text.ToUpper()))</text>"
+      $svg += "</svg>"
+    }
+  }
+  
+  Write-XYProgress 0.8 'Saving barcode...'
+  
+  $outputPath = Join-Path $Cwd $filename
+  $svg | Out-File -FilePath $outputPath -Encoding UTF8 -NoNewline
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  Write-XY @{ files = @($filename) }
+  Write-XY @{ table = @{ title='Barcode Generated'; header=@('Property','Value'); rows=@(@('Type', $barcodeType.ToUpper()), @('Text', $text), @('File', $filename)); caption='Barcode generated as SVG' } }
+  [pscustomobject]@{ tool='Barcode Generator'; type=$barcodeType; text=$text; file=$filename }
+}
+
+# ------------------------- Fake Data Generator -------------------------
+function Invoke-FakeDataGenerator {
+  param($Params)
+  Write-XYProgress 0.1 'Validating parameters...'
+  
+  $dataType = ($Params.fakeDataType ?? 'person')
+  $count = [int]($Params.fakeCount ?? 1)
+  $count = [Math]::Max(1, [Math]::Min($count, 100))
+  
+  Write-XYProgress 0.3 'Generating fake data...'
+  
+  # Data pools
+  $firstNames = @('James','Mary','John','Patricia','Robert','Jennifer','Michael','Linda','David','Elizabeth','William','Barbara','Richard','Susan','Joseph','Jessica','Thomas','Sarah','Christopher','Karen','Charles','Lisa','Daniel','Nancy','Matthew','Betty','Anthony','Margaret','Mark','Sandra','Donald','Ashley','Steven','Kimberly','Paul','Emily','Andrew','Donna','Joshua','Michelle','Kenneth','Dorothy','Kevin','Carol','Brian','Amanda','George','Melissa','Timothy','Deborah')
+  $lastNames = @('Smith','Johnson','Williams','Brown','Jones','Garcia','Miller','Davis','Rodriguez','Martinez','Hernandez','Lopez','Gonzalez','Wilson','Anderson','Thomas','Taylor','Moore','Jackson','Martin','Lee','Perez','Thompson','White','Harris','Sanchez','Clark','Ramirez','Lewis','Robinson','Walker','Young','Allen','King','Wright','Scott','Torres','Nguyen','Hill','Flores')
+  $domains = @('gmail.com','yahoo.com','hotmail.com','outlook.com','icloud.com','mail.com','proton.me','example.com','company.org')
+  $streets = @('Main St','Oak Ave','Maple Dr','Cedar Ln','Pine Rd','Elm St','Park Ave','Lake Dr','Hill Rd','River Rd','Forest Ave','Valley Dr','Sunset Blvd','Ocean Ave','Mountain Rd')
+  $cities = @('New York','Los Angeles','Chicago','Houston','Phoenix','Philadelphia','San Antonio','San Diego','Dallas','San Jose','Austin','Jacksonville','Fort Worth','Columbus','Charlotte','Seattle','Denver','Boston','Portland','Miami')
+  $states = @('NY','CA','IL','TX','AZ','PA','FL','OH','NC','WA','CO','MA','OR','GA','MI','NJ','VA','TN','MO','MD')
+  $companies = @('Acme Corp','Global Tech','Innovative Solutions','Digital Dynamics','Future Systems','Prime Industries','Elite Services','Apex Group','Pinnacle Inc','Quantum Labs')
+  $jobTitles = @('Software Engineer','Product Manager','Data Analyst','Marketing Director','Sales Representative','HR Manager','Financial Analyst','Operations Manager','Project Coordinator','UX Designer')
+  
+  # Use Get-Random for reliability (avoids array output issues with scriptblocks)
+  $randomInt = { param([int]$max) return [int](Get-Random -Maximum $max) }
+  
+  $results = [System.Collections.Generic.List[object]]::new()
+  $rows = [System.Collections.Generic.List[object]]::new()
+  
+  for ($i = 0; $i -lt $count; $i++) {
+    Write-XYProgress (0.3 + 0.6 * ($i / $count)) "Generating record $($i + 1) of $count..."
+    
+    $firstName = $firstNames[(& $randomInt $firstNames.Count)]
+    $lastName = $lastNames[(& $randomInt $lastNames.Count)]
+    $fullName = "$firstName $lastName"
+    $email = "$($firstName.ToLower()).$($lastName.ToLower())@$($domains[(& $randomInt $domains.Count)])"
+    $phone = "+1 ($((& $randomInt 900) + 100)) $((& $randomInt 900) + 100)-$((& $randomInt 9000) + 1000)"
+    $streetNum = (& $randomInt 9999) + 1
+    $street = $streets[(& $randomInt $streets.Count)]
+    $city = $cities[(& $randomInt $cities.Count)]
+    $state = $states[(& $randomInt $states.Count)]
+    $zip = '{0:D5}' -f ((& $randomInt 90000) + 10000)
+    $address = "$streetNum $street, $city, $state $zip"
+    $company = $companies[(& $randomInt $companies.Count)]
+    $jobTitle = $jobTitles[(& $randomInt $jobTitles.Count)]
+    [int]$age = [int](& $randomInt 50) + 18
+    [int]$birthYear = 1958 + (Get-Random -Maximum 51)
+    [int]$birthMonth = 1 + (Get-Random -Maximum 12)
+    [int]$birthDay = 1 + (Get-Random -Maximum 28)
+    $dob = '{0:D4}-{1:D2}-{2:D2}' -f $birthYear, $birthMonth, $birthDay
+    
+    $record = switch ($dataType) {
+      'person' { [pscustomobject]@{ name=$fullName; email=$email; phone=$phone; address=$address; dob=$dob } }
+      'contact' { [pscustomobject]@{ firstName=$firstName; lastName=$lastName; email=$email; phone=$phone } }
+      'address' { [pscustomobject]@{ street="$streetNum $street"; city=$city; state=$state; zip=$zip; country='USA' } }
+      'company' { [pscustomobject]@{ company=$company; contact=$fullName; email=$email; phone=$phone } }
+      'employee' { [pscustomobject]@{ name=$fullName; email=$email; jobTitle=$jobTitle; company=$company; phone=$phone } }
+    }
+    $results.Add($record)
+    
+    if ($count -le 10) {
+      $rowData = switch ($dataType) {
+        'person' { @(($i+1), $fullName, $email, $phone) }
+        'contact' { @(($i+1), $firstName, $lastName, $email) }
+        'address' { @(($i+1), "$streetNum $street", $city, "$state $zip") }
+        'company' { @(($i+1), $company, $fullName, $email) }
+        'employee' { @(($i+1), $fullName, $jobTitle, $company) }
+      }
+      $rows.Add($rowData)
+    }
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  $headers = switch ($dataType) {
+    'person' { @('#','Name','Email','Phone') }
+    'contact' { @('#','First Name','Last Name','Email') }
+    'address' { @('#','Street','City','State/Zip') }
+    'company' { @('#','Company','Contact','Email') }
+    'employee' { @('#','Name','Job Title','Company') }
+  }
+  $typeNames = @{ person='Person'; contact='Contact'; address='Address'; company='Company'; employee='Employee' }
+  
+  if ($count -le 10) {
+    Write-XY @{ table = @{ title="Fake $($typeNames[$dataType]) Data"; header=$headers; rows=$rows.ToArray(); caption="Generated $count record(s)" } }
+  } else {
+    Write-XY @{ table = @{ title="Fake $($typeNames[$dataType]) Data"; header=@('Property','Value'); rows=@(@('Type', $typeNames[$dataType]), @('Count', $count), @('Sample', $results[0].name ?? $results[0].company ?? $results[0].street)); caption="Generated $count records (data in output)" } }
+  }
+  [pscustomobject]@{ tool='Fake Data Generator'; type=$dataType; count=$count; data=$results.ToArray() }
+}
+
+# ------------------------- Syntax Validator
+function Invoke-SyntaxValidator {
+  param($Params, $JobInput, [string]$Cwd)
+  Write-XYProgress 0.05 'Validating parameters...'
+  
+  $format = Get-Param $Params 'syntaxFormat' 'json'
+  $source = Get-Param $Params 'syntaxSource' 'field'
+  $saveFormatted = if ($Params.PSObject.Properties.Name -contains 'syntaxSaveFormatted') { [bool]$Params.syntaxSaveFormatted } else { $false }
+  $content = ''
+  $fileName = ''
+  
+  # Get input content
+  switch ($source) {
+    'field' { $content = Get-Param $Params 'syntaxInput' '' }
+    'file' {
+      $filePath = Get-Param $Params 'syntaxFilePath' ''
+      if (-not $filePath) { throw 'File path is required when source is file' }
+      $fullPath = if ([System.IO.Path]::IsPathRooted($filePath)) { $filePath } else { Join-Path $Cwd $filePath }
+      if (-not (Test-Path $fullPath)) { throw "File not found: $fullPath" }
+      $content = [System.IO.File]::ReadAllText($fullPath, [System.Text.Encoding]::UTF8)
+      $fileName = [System.IO.Path]::GetFileName($fullPath)
+    }
+    'input' {
+      $inputData = $JobInput.data
+      if (-not $inputData) { throw 'No input data available from previous job' }
+      $path = Get-Param $Params 'syntaxDataPath' ''
+      $val = Get-NestedValue $inputData $path
+      if ($null -eq $val) { throw "Data path '$path' not found in input data" }
+      $content = if ($val -is [string]) { $val } else { ($val | ConvertTo-Json -Compress -Depth 20) }
+    }
+  }
+  
+  if (-not $content.Trim()) { throw 'No content provided for validation' }
+  
+  Write-XYProgress 0.2 "Validating $($format.ToUpper())..."
+  
+  $valid = $true
+  $errors = [System.Collections.Generic.List[string]]::new()
+  $warnings = [System.Collections.Generic.List[string]]::new()
+  $formatted = ''
+  $stats = @{}
+  
+  switch ($format) {
+    # -------------------- JSON --------------------
+    'json' {
+      try {
+        $parsed = $content | ConvertFrom-Json -ErrorAction Stop
+        $formatted = $parsed | ConvertTo-Json -Depth 50
+        $stats['type'] = if ($content.Trim().StartsWith('[')) { 'Array' } else { 'Object' }
+        $stats['depth'] = 0
+        # Calculate depth
+        $depthCount = 0; $maxDepth = 0
+        foreach ($c in $content.ToCharArray()) {
+          if ($c -eq '{' -or $c -eq '[') { $depthCount++; if ($depthCount -gt $maxDepth) { $maxDepth = $depthCount } }
+          elseif ($c -eq '}' -or $c -eq ']') { $depthCount-- }
+        }
+        $stats['depth'] = $maxDepth
+        $stats['keys'] = if ($parsed -is [array]) { $parsed.Count } else { ($parsed.PSObject.Properties | Measure-Object).Count }
+      } catch {
+        $valid = $false
+        $errors.Add("JSON Parse Error: $($_.Exception.Message)")
+      }
+    }
+    
+    # -------------------- XML --------------------
+    'xml' {
+      try {
+        $xmlDoc = [xml]$content
+        # Pretty print XML
+        $sw = [System.IO.StringWriter]::new()
+        $xws = [System.Xml.XmlWriterSettings]::new()
+        $xws.Indent = $true
+        $xws.IndentChars = '  '
+        $xws.OmitXmlDeclaration = $false
+        $xw = [System.Xml.XmlWriter]::Create($sw, $xws)
+        $xmlDoc.WriteTo($xw)
+        $xw.Flush()
+        $formatted = $sw.ToString()
+        $stats['rootElement'] = $xmlDoc.DocumentElement.Name
+        $stats['elements'] = ($xmlDoc.SelectNodes('//*') | Measure-Object).Count
+        $stats['attributes'] = ($xmlDoc.SelectNodes('//@*') | Measure-Object).Count
+        # Lint checks
+        if (-not $content.Trim().StartsWith('<?xml')) { $warnings.Add('Missing XML declaration (<?xml version="1.0"?>)') }
+        if ($xmlDoc.DocumentElement.NamespaceURI -and -not $xmlDoc.DocumentElement.Prefix) { $warnings.Add('Default namespace used without prefix - may cause XPath issues') }
+      } catch {
+        $valid = $false
+        $errors.Add("XML Parse Error: $($_.Exception.Message)")
+      }
+    }
+    
+    # -------------------- YAML --------------------
+    'yaml' {
+      # Basic YAML validation (PowerShell doesn't have built-in YAML)
+      $lines = $content -split "`n"
+      $indentStack = [System.Collections.Generic.Stack[int]]::new()
+      $indentStack.Push(0)
+      $lineNum = 0
+      $keyCount = 0
+      $listItems = 0
+      
+      foreach ($line in $lines) {
+        $lineNum++
+        $trimmed = $line.TrimEnd()
+        if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
+        
+        # Check for tabs
+        if ($trimmed -match '^\t') { $errors.Add("Line ${lineNum}: Tabs are not allowed in YAML, use spaces"); $valid = $false }
+        
+        # Calculate indent
+        $indent = 0
+        foreach ($c in $line.ToCharArray()) { if ($c -eq ' ') { $indent++ } else { break } }
+        
+        # Validate indent consistency
+        if ($indent % 2 -ne 0 -and $indent -gt 0) { $warnings.Add("Line ${lineNum}: Inconsistent indentation ($indent spaces), recommend 2-space increments") }
+        
+        # Check for key-value pairs
+        if ($trimmed -match '^[\w][\w\s-]*:') { $keyCount++ }
+        if ($trimmed.StartsWith('- ')) { $listItems++ }
+        
+        # Check for common errors
+        if ($trimmed -match ':\s*\|\s*$' -or $trimmed -match ':\s*>\s*$') { } # Multiline OK
+        elseif ($trimmed -match ':.*:' -and -not ($trimmed -match '".*:.*"' -or $trimmed -match "'.*:.*'")) {
+          $warnings.Add("Line ${lineNum}: Multiple colons - ensure values with colons are quoted")
+        }
+        
+        # Check unquoted special values
+        if ($trimmed -match ':\s*(yes|no|on|off|true|false)\s*$' -and -not ($trimmed -match '"' -or $trimmed -match "'")) {
+          $warnings.Add("Line ${lineNum}: Boolean-like value should be quoted to avoid ambiguity")
+        }
+      }
+      
+      if ($keyCount -eq 0 -and $listItems -eq 0) { $errors.Add('No valid YAML structure detected'); $valid = $false }
+      
+      $stats['keys'] = $keyCount
+      $stats['listItems'] = $listItems
+      $stats['lines'] = $lineNum
+      
+      # Format output (basic indentation cleanup)
+      $formatted = ($lines | ForEach-Object { $_.TrimEnd() }) -join "`n"
+    }
+    
+    # -------------------- Markdown --------------------
+    'markdown' {
+      $lines = $content -split "`n"
+      $lineNum = 0
+      $headings = [System.Collections.Generic.List[object]]::new()
+      $links = 0; $images = 0; $codeBlocks = 0; $inCodeBlock = $false
+      $lastHeadingLevel = 0
+      
+      foreach ($line in $lines) {
+        $lineNum++
+        $trimmed = $line.TrimEnd()
+        
+        # Code blocks
+        if ($trimmed -match '^```') {
+          $inCodeBlock = -not $inCodeBlock
+          $codeBlocks++
+          continue
+        }
+        if ($inCodeBlock) { continue }
+        
+        # Headings
+        if ($trimmed -match '^(#{1,6})\s+(.+)$') {
+          $level = $Matches[1].Length
+          $text = $Matches[2]
+          $headings.Add([pscustomobject]@{ level=$level; text=$text; line=$lineNum })
+          
+          # Lint: heading hierarchy
+          if ($level -gt $lastHeadingLevel + 1 -and $lastHeadingLevel -gt 0) {
+            $warnings.Add("Line ${lineNum}: Heading level skipped (H$lastHeadingLevel to H$level)")
+          }
+          $lastHeadingLevel = $level
+          
+          # Lint: no space after #
+          if ($line -match '^#+[^\s#]') { $warnings.Add("Line ${lineNum}: Missing space after heading marker") }
+        }
+        
+        # Links
+        $linkMatches = [regex]::Matches($trimmed, '\[([^\]]+)\]\(([^)]+)\)')
+        $links += $linkMatches.Count
+        foreach ($m in $linkMatches) {
+          $url = $m.Groups[2].Value
+          if ($url -notmatch '^(https?://|mailto:|#|/)' -and $url -notmatch '\.\w+$') {
+            $warnings.Add("Line ${lineNum}: Potentially invalid link: $url")
+          }
+        }
+        
+        # Images
+        $images += ([regex]::Matches($trimmed, '!\[([^\]]*)\]\(([^)]+)\)')).Count
+        
+        # Lint: trailing whitespace
+        if ($line -match '\s{3,}$') { $warnings.Add("Line ${lineNum}: Excessive trailing whitespace") }
+        
+        # Lint: hard tabs
+        if ($line -match '\t' -and -not $inCodeBlock) { $warnings.Add("Line ${lineNum}: Tab character found, prefer spaces") }
+        
+        # Lint: multiple blank lines
+        if ($lineNum -gt 1 -and -not $trimmed -and -not $lines[$lineNum - 2].Trim()) {
+          # Skip duplicate warnings
+        }
+      }
+      
+      if ($inCodeBlock) { $errors.Add('Unclosed code block (missing closing ```)'); $valid = $false }
+      if ($headings.Count -eq 0) { $warnings.Add('No headings found in document') }
+      if ($headings.Count -gt 0 -and $headings[0].level -ne 1) { $warnings.Add('Document should start with H1 heading') }
+      
+      $stats['headings'] = $headings.Count
+      $stats['links'] = $links
+      $stats['images'] = $images
+      $stats['codeBlocks'] = [Math]::Floor($codeBlocks / 2)
+      $stats['lines'] = $lineNum
+      
+      $formatted = $content
+    }
+    
+    # -------------------- CSV --------------------
+    'csv' {
+      $lines = @($content -split "`n" | Where-Object { $_.Trim() })
+      if ($lines.Count -eq 0) { $errors.Add('Empty CSV content'); $valid = $false }
+      else {
+        # Detect delimiter
+        $firstLine = $lines[0]
+        $delimiterCandidates = @(',', ';', "`t", '|')
+        $delimiterCounts = @{}
+        foreach ($d in $delimiterCandidates) { $delimiterCounts[$d] = @($firstLine.ToCharArray() | Where-Object { $_ -eq $d }).Count }
+        $delimiter = ($delimiterCounts.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1).Key
+        if ($delimiterCounts[$delimiter] -eq 0) { $delimiter = ',' }
+        
+        # Parse and validate
+        $headerCols = ($firstLine -split [regex]::Escape($delimiter)).Count
+        $rowNum = 0
+        $maxCols = $headerCols
+        $minCols = $headerCols
+        
+        foreach ($line in $lines) {
+          $rowNum++
+          $cols = ($line -split [regex]::Escape($delimiter)).Count
+          if ($cols -ne $headerCols) {
+            $errors.Add("Row ${rowNum}: Column count mismatch (expected $headerCols, got $cols)")
+            $valid = $false
+          }
+          if ($cols -gt $maxCols) { $maxCols = $cols }
+          if ($cols -lt $minCols) { $minCols = $cols }
+          
+          # Check for unescaped quotes
+          $quoteCount = @($line.ToCharArray() | Where-Object { $_ -eq '"' }).Count
+          if ($quoteCount % 2 -ne 0) { $warnings.Add("Row ${rowNum}: Unbalanced quotes") }
+        }
+        
+        $stats['rows'] = $rowNum
+        $stats['columns'] = $headerCols
+        $stats['delimiter'] = switch ($delimiter) { ',' { 'Comma' }; ';' { 'Semicolon' }; "`t" { 'Tab' }; '|' { 'Pipe' }; default { $delimiter } }
+        
+        # Format CSV (align columns for display)
+        try {
+          $csvData = $content | ConvertFrom-Csv -Delimiter $delimiter -ErrorAction Stop
+          $formatted = ($csvData | ConvertTo-Csv -Delimiter $delimiter -NoTypeInformation) -join "`n"
+        } catch {
+          $formatted = $content
+          $warnings.Add("Could not parse CSV for formatting: $($_.Exception.Message)")
+        }
+      }
+    }
+    
+    # -------------------- TOML --------------------
+    'toml' {
+      $lines = $content -split "`n"
+      $lineNum = 0
+      $sections = [System.Collections.Generic.List[string]]::new()
+      $keyCount = 0
+      $currentSection = 'root'
+      
+      foreach ($line in $lines) {
+        $lineNum++
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
+        
+        # Section headers
+        if ($trimmed -match '^\[\[?([^\]]+)\]\]?$') {
+          $currentSection = $Matches[1]
+          $sections.Add($currentSection)
+          continue
+        }
+        
+        # Key-value pairs
+        if ($trimmed -match '^([\w.-]+)\s*=\s*(.+)$') {
+          $key = $Matches[1]
+          $value = $Matches[2]
+          $keyCount++
+          
+          # Validate value types
+          if ($value -match '^".*[^\\]"$' -or $value -match "^'.*'$") { } # String OK
+          elseif ($value -match '^-?\d+$') { } # Integer OK
+          elseif ($value -match '^-?\d+\.\d+$') { } # Float OK
+          elseif ($value -match '^(true|false)$') { } # Boolean OK
+          elseif ($value -match '^\d{4}-\d{2}-\d{2}') { } # Date OK
+          elseif ($value -match '^\[') { } # Array OK
+          elseif ($value -match '^\{') { } # Inline table OK
+          else { $warnings.Add("Line ${lineNum}: Unquoted string value for key '$key'") }
+        }
+        elseif (-not $trimmed.StartsWith('[')) {
+          $errors.Add("Line ${lineNum}: Invalid TOML syntax")
+          $valid = $false
+        }
+      }
+      
+      $stats['sections'] = $sections.Count
+      $stats['keys'] = $keyCount
+      $stats['lines'] = $lineNum
+      $formatted = $content
+    }
+    
+    # -------------------- HTML --------------------
+    'html' {
+      # Basic HTML validation
+      $tagStack = [System.Collections.Generic.Stack[string]]::new()
+      $selfClosing = @('area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr')
+      
+      # Find all tags
+      $tagMatches = [regex]::Matches($content, '<(/?)([\w-]+)([^>]*?)(/?)>')
+      $tagCount = 0
+      
+      foreach ($m in $tagMatches) {
+        $isClose = $m.Groups[1].Value -eq '/'
+        $tagName = $m.Groups[2].Value.ToLower()
+        $isSelfClose = $m.Groups[4].Value -eq '/' -or $selfClosing -contains $tagName
+        $tagCount++
+        
+        if ($isClose) {
+          if ($tagStack.Count -eq 0) {
+            $errors.Add("Unexpected closing tag: </$tagName>")
+            $valid = $false
+          }
+          elseif ($tagStack.Peek() -ne $tagName) {
+            $errors.Add("Mismatched tag: expected </$($tagStack.Peek())>, found </$tagName>")
+            $valid = $false
+            $tagStack.Pop() | Out-Null
+          }
+          else {
+            $tagStack.Pop() | Out-Null
+          }
+        }
+        elseif (-not $isSelfClose) {
+          $tagStack.Push($tagName)
+        }
+      }
+      
+      while ($tagStack.Count -gt 0) {
+        $unclosed = $tagStack.Pop()
+        $errors.Add("Unclosed tag: <$unclosed>")
+        $valid = $false
+      }
+      
+      # Lint checks
+      if ($content -notmatch '<!DOCTYPE\s+html' -and $content -match '<html') {
+        $warnings.Add('Missing DOCTYPE declaration')
+      }
+      if ($content -match '<html' -and $content -notmatch '<html[^>]*lang=') {
+        $warnings.Add('Missing lang attribute on <html> tag')
+      }
+      if ($content -match '<img' -and $content -notmatch '<img[^>]*alt=') {
+        $warnings.Add('Image tag(s) missing alt attribute')
+      }
+      if ($content -match '<head' -and $content -notmatch '<meta[^>]*charset') {
+        $warnings.Add('Missing charset meta tag')
+      }
+      
+      $stats['tags'] = $tagCount
+      $stats['hasDoctype'] = $content -match '<!DOCTYPE'
+      $stats['hasHead'] = $content -match '<head'
+      $stats['hasBody'] = $content -match '<body'
+      
+      # Basic formatting (indent)
+      $formatted = $content -replace '>\s*<', ">\n<"
+    }
+    
+    # -------------------- INI --------------------
+    'ini' {
+      $lines = $content -split "`n"
+      $lineNum = 0
+      $sections = [System.Collections.Generic.List[string]]::new()
+      $keyCount = 0
+      $currentSection = 'global'
+      
+      foreach ($line in $lines) {
+        $lineNum++
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith(';') -or $trimmed.StartsWith('#')) { continue }
+        
+        # Section
+        if ($trimmed -match '^\[([^\]]+)\]$') {
+          $currentSection = $Matches[1]
+          $sections.Add($currentSection)
+          continue
+        }
+        
+        # Key=Value
+        if ($trimmed -match '^([^=]+)=(.*)$') {
+          $keyCount++
+        }
+        else {
+          $errors.Add("Line ${lineNum}: Invalid INI syntax")
+          $valid = $false
+        }
+      }
+      
+      $stats['sections'] = $sections.Count
+      $stats['keys'] = $keyCount
+      $stats['lines'] = $lineNum
+      $formatted = $content
+    }
+    
+    # -------------------- Properties --------------------
+    'properties' {
+      $lines = $content -split "`n"
+      $lineNum = 0
+      $keyCount = 0
+      $continuations = 0
+      
+      foreach ($line in $lines) {
+        $lineNum++
+        $trimmed = $line.TrimStart()
+        if (-not $trimmed -or $trimmed.StartsWith('#') -or $trimmed.StartsWith('!')) { continue }
+        
+        # Check for continuation
+        if ($line.EndsWith('\')) { $continuations++; continue }
+        
+        # Key=Value or Key:Value or Key Value
+        if ($trimmed -match '^([^=:\s]+)\s*[=:]\s*(.*)$' -or $trimmed -match '^([^\s]+)\s+(.+)$') {
+          $keyCount++
+          $key = $Matches[1]
+          
+          # Lint: check for special characters in key
+          if ($key -match '[^\w.-]') { $warnings.Add("Line ${lineNum}: Key '$key' contains special characters") }
+        }
+        elseif ($trimmed) {
+          $warnings.Add("Line ${lineNum}: Ambiguous syntax - could not parse key-value pair")
+        }
+      }
+      
+      $stats['keys'] = $keyCount
+      $stats['continuations'] = $continuations
+      $stats['lines'] = $lineNum
+      $formatted = $content
+    }
+  }
+  
+  Write-XYProgress 0.8 'Generating output...'
+  
+  # Build summary rows
+  $summaryRows = @(
+    @('Format', $format.ToUpper()),
+    @('Valid', $(if ($valid) { 'Yes' } else { 'No' })),
+    @('Errors', $errors.Count),
+    @('Warnings', $warnings.Count),
+    @('Size', "$($content.Length) chars")
+  )
+  $statsKeyNames = @{
+    'type'='Type'; 'depth'='Nesting Depth'; 'keys'='Keys/Properties'
+    'rootElement'='Root Element'; 'elements'='Elements'; 'attributes'='Attributes'
+    'listItems'='List Items'; 'lines'='Lines'; 'headings'='Headings'
+    'links'='Links'; 'images'='Images'; 'codeBlocks'='Code Blocks'
+    'rows'='Rows'; 'columns'='Columns'; 'delimiter'='Delimiter'
+    'sections'='Sections'; 'tags'='HTML Tags'; 'continuations'='Line Continuations'
+    'hasDoctype'='Has DOCTYPE'; 'hasHead'='Has <head>'; 'hasBody'='Has <body>'
+  }
+  $statsEntries = @($stats.GetEnumerator())
+  foreach ($entry in $statsEntries) {
+    $statKey = $entry.Key
+    $statVal = $entry.Value
+    $displayKey = if ($statsKeyNames.ContainsKey($statKey)) { $statsKeyNames[$statKey] } else { [string]$statKey }
+    $displayVal = if ($statVal -is [bool]) { if ($statVal) { 'Yes' } else { 'No' } } else { $statVal }
+    $summaryRows += ,@($displayKey, $displayVal)
+  }
+  
+  Write-XY @{ table = @{ title="$($format.ToUpper()) Validation Results"; header=@('Property','Value'); rows=$summaryRows; caption=$(if ($valid) { 'Validation passed' } else { 'Validation failed' }) } }
+  
+  if ($errors.Count -gt 0) {
+    $errorRows = for ($i = 0; $i -lt [Math]::Min($errors.Count, 20); $i++) { ,@(($i + 1), $errors[$i]) }
+    Write-XY @{ table = @{ title='Errors'; header=@('#','Error'); rows=$errorRows; caption=$(if ($errors.Count -gt 20) { "Showing 20 of $($errors.Count) errors" } else { '' }) } }
+  }
+  
+  if ($warnings.Count -gt 0) {
+    $warnRows = for ($i = 0; $i -lt [Math]::Min($warnings.Count, 20); $i++) { ,@(($i + 1), $warnings[$i]) }
+    Write-XY @{ table = @{ title='Warnings (Lint)'; header=@('#','Warning'); rows=$warnRows; caption=$(if ($warnings.Count -gt 20) { "Showing 20 of $($warnings.Count) warnings" } else { '' }) } }
+  }
+  
+  # Show formatted preview
+  if ($valid -and $formatted) {
+    $preview = if ($formatted.Length -gt 2000) { $formatted.Substring(0, 2000) + "`n... (truncated)" } else { $formatted }
+    Write-XY @{ text = @{ title='Formatted Output'; content=$preview; caption='' } }
+  }
+  
+  # Save formatted file
+  $outputFiles = @()
+  if ($saveFormatted -and $valid -and $formatted) {
+    $ext = switch ($format) {
+      'json' { 'json' }; 'xml' { 'xml' }; 'yaml' { 'yaml' }; 'markdown' { 'md' }
+      'csv' { 'csv' }; 'toml' { 'toml' }; 'html' { 'html' }; 'ini' { 'ini' }
+      'properties' { 'properties' }; default { 'txt' }
+    }
+    $outName = if ($fileName) { [System.IO.Path]::GetFileNameWithoutExtension($fileName) + ".formatted.$ext" } else { "formatted.$ext" }
+    $outPath = Join-Path $Cwd $outName
+    [System.IO.File]::WriteAllText($outPath, $formatted, [System.Text.Encoding]::UTF8)
+    $outputFiles += $outName
+    Write-XY @{ files = $outputFiles }
+  }
+  
+  Write-XYProgress 0.95 'Finalizing...'
+  
+  [pscustomobject]@{
+    tool = 'Syntax Validator'
+    format = $format
+    valid = $valid
+    errors = $errors.ToArray()
+    warnings = $warnings.ToArray()
+    errorCount = $errors.Count
+    warningCount = $warnings.Count
+    stats = $stats
+    inputSize = $content.Length
+    formattedOutput = $(if ($saveFormatted -and $valid) { $formatted } else { $null })
+    outputFiles = $outputFiles
+  }
 }
 
 # ------------------------- Main -------------------------
@@ -1143,7 +2519,21 @@ try {
     'qrCode'         { $result = Invoke-QRCode -Params $params -JobInput $jobInput -Cwd $cwd }
     'ibanValidator'  { $result = Invoke-IBANValidator -Params $params -JobInput $jobInput }
     'passphrase'     { $result = Invoke-PassphraseGenerator -Params $params }
-    'loremIpsum'     { $result = Invoke-LoremIpsum -Params $params }
+    'loremIpsum'     { $result = Invoke-LoremIpsum -Params $params -Cwd $cwd }
+    'base64'         { $result = Invoke-Base64 -Params $params -JobInput $jobInput }
+    'urlEncode'      { $result = Invoke-UrlEncode -Params $params -JobInput $jobInput }
+    'timestamp'      { $result = Invoke-TimestampConverter -Params $params -JobInput $jobInput }
+    'jsonFormatter'  { $result = Invoke-JsonFormatter -Params $params -JobInput $jobInput }
+    'caseConverter'  { $result = Invoke-CaseConverter -Params $params -JobInput $jobInput }
+    'colorConverter' { $result = Invoke-ColorConverter -Params $params -JobInput $jobInput }
+    'imageConverter' { $result = Invoke-ImageConverter -Params $params -Cwd $cwd }
+    'slugGenerator'  { $result = Invoke-SlugGenerator -Params $params -JobInput $jobInput }
+    'textStatistics' { $result = Invoke-TextStatistics -Params $params -JobInput $jobInput }
+    'creditCardValidator' { $result = Invoke-CreditCardValidator -Params $params -JobInput $jobInput }
+    'emailValidator' { $result = Invoke-EmailValidator -Params $params -JobInput $jobInput }
+    'barcodeGenerator' { $result = Invoke-BarcodeGenerator -Params $params -Cwd $cwd }
+    'fakeDataGenerator' { $result = Invoke-FakeDataGenerator -Params $params }
+    'syntaxValidator' { $result = Invoke-SyntaxValidator -Params $params -JobInput $jobInput -Cwd $cwd }
     default          { throw "Unknown tool: $tool" }
   }
 
