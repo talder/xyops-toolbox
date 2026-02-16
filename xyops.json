@@ -576,7 +576,7 @@
 											"id": "imgWidth",
 											"title": "Width / Percentage",
 											"type": "text",
-											"value": "",
+											"value": 0,
 											"variant": "number",
 											"caption": "Target width in pixels, or percentage for 'By Percentage' mode."
 										},
@@ -584,7 +584,7 @@
 											"id": "imgHeight",
 											"title": "Height",
 											"type": "text",
-											"value": "",
+											"value": 0,
 											"variant": "number",
 											"caption": "Target height in pixels (for 'Exact Dimensions' or 'By Height' mode)."
 										}
@@ -627,14 +627,14 @@
 											"id": "slugLowercase",
 											"title": "Lowercase",
 											"type": "checkbox",
-											"value": "true",
+											"value": true,
 											"caption": "Convert to lowercase."
 										},
 										{
 											"id": "slugMaxLength",
 											"title": "Max Length",
 											"type": "text",
-											"value": "",
+											"value": 0,
 											"variant": "number",
 											"caption": "Maximum length of the slug (0 for no limit)."
 										}
