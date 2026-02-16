@@ -3,9 +3,8 @@
 
 # xyOps Toolbox Plugin
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/talder/xyops-toolbox/releases)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/talder/xyops-toolbox/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-14.0+-green.svg)](https://nodejs.org)
 [![PowerShell](https://img.shields.io/badge/PowerShell-7.0+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)]()
 
@@ -59,12 +58,6 @@ A comprehensive xyOps Event Plugin containing 21 utility tools for data generati
 ```bash
 cd /opt/xyops/plugins
 git clone https://github.com/talder/xyops-toolbox.git
-```
-
-### NPX (Direct Run)
-
-```bash
-npx -y github:talder/xyops-toolbox
 ```
 
 ---
@@ -269,14 +262,16 @@ Generate QR codes for URLs, text, or data with customizable appearance.
 
 ### Barcode Generator
 
-Generate industry-standard barcodes as SVG files.
+Generate industry-standard barcodes as SVG and PNG files.
 
 **Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| Data Source | Select | field | Text field or job input data |
 | Barcode Type | Select | code128 | Code 128 or Code 39 |
 | Barcode Text | Text | - | Text to encode |
+| Input Data Path | Text | - | Dot-notation path for input data |
 
 **Supported Formats:**
 
@@ -285,6 +280,10 @@ Generate industry-standard barcodes as SVG files.
 | Code 128 | Full ASCII (0-127) | General purpose, compact |
 | Code 39 | A-Z, 0-9, special chars | Industrial, automotive |
 
+**Output Files:**
+- `barcode-{type}.svg` - Scalable vector graphic
+- `barcode-{type}.png` - Raster image with text label
+
 **Example Output:**
 
 ```json
@@ -292,7 +291,7 @@ Generate industry-standard barcodes as SVG files.
   "tool": "Barcode Generator",
   "type": "code128",
   "text": "PRODUCT-12345",
-  "file": "barcode-code128.svg"
+  "files": ["barcode-code128.svg", "barcode-code128.png"]
 }
 ```
 
@@ -300,39 +299,62 @@ Generate industry-standard barcodes as SVG files.
 
 ### Fake Data Generator
 
-Generate realistic fake data for testing and development purposes.
+Generate realistic fake data for testing and development purposes with multi-country support.
 
 **Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| Data Type | Select | person | Type of data to generate |
+| Data Type | Select | identity | Type of data to generate |
+| Country | Select | us | Country for localized data |
 | Count | Number | 1 | Records to generate (1-100) |
+
+**Supported Countries:**
+
+| Country | Code | Features |
+|---------|------|----------|
+| United States | us | US names, addresses, phone formats |
+| United Kingdom | uk | UK names, postcodes, +44 numbers |
+| Germany | de | German names, PLZ codes, +49 numbers |
+| France | fr | French names, départements, +33 numbers |
+| Netherlands | nl | Dutch names, postcodes, +31 numbers |
+| Belgium | be | Belgian names, provinces, +32 numbers |
+| Spain | es | Spanish names, provincias, +34 numbers |
+| Italy | it | Italian names, province, +39 numbers |
 
 **Data Types:**
 
 | Type | Fields Generated |
 |------|------------------|
+| Full Identity | Complete profile: personal info (name, DOB, email, mobile, address) + work info (company, job title, work email, work phone, work address) |
 | Person | name, email, phone, address, date of birth |
 | Contact | first name, last name, email, phone |
-| Address | street, city, state, zip, country |
+| Address | street, city, region, postal code, country |
 | Company | company name, contact, email, phone |
 | Employee | name, email, job title, company, phone |
 
-**Example Output (Person):**
+**Example Output (Full Identity - Belgium):**
 
 ```json
 {
   "tool": "Fake Data Generator",
-  "type": "person",
+  "type": "identity",
+  "country": "Belgium",
   "count": 1,
   "data": [
     {
-      "name": "James Smith",
-      "email": "james.smith@gmail.com",
-      "phone": "+1 (555) 123-4567",
-      "address": "1234 Main St, New York, NY 10001",
-      "dob": "1985-03-15"
+      "firstName": "Pieter",
+      "lastName": "Janssens",
+      "fullName": "Pieter Janssens",
+      "dateOfBirth": "1987-04-22",
+      "personalEmail": "pieter.janssens@gmail.com",
+      "mobile": "+32 478 12 34 56",
+      "phone": "+32 2 123 45 67",
+      "address": "Kerkstraat 42, 9000 Gent, Oost-Vlaanderen, Belgium",
+      "company": "Proximus",
+      "jobTitle": "Software Engineer",
+      "workEmail": "p.janssens@proximus.be",
+      "workPhone": "+32 2 987 65 43"
     }
   ]
 }
@@ -503,9 +525,13 @@ Convert colors between HEX, RGB, and HSL formats.
   "hsl": "hsl(11, 100%, 60%)",
   "red": 255,
   "green": 87,
-  "blue": 51
+  "blue": 51,
+  "swatchFile": "color-swatch-FF5733.png"
 }
 ```
+
+**Output Files:**
+- `color-swatch-RRGGBB.png` - 100x100 pixel color preview image
 
 ---
 
@@ -546,11 +572,22 @@ Convert images between formats and resize them.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| Input File | Text | - | Path to input image |
+| File Source | Select | field | Source of input image |
+| Input File Path | Text | - | Path to input image (when source is 'path field') |
+| File Index | Number | 0 | Index in job input files (when source is 'input files') |
+| Input Data Path | Text | - | Dot-notation path to file path (when source is 'input data') |
 | Output Format | Select | png | PNG, JPEG, BMP, GIF, TIFF |
 | Resize Mode | Select | none | Resize method |
 | Width / Percentage | Number | - | Target width or percentage |
 | Height | Number | - | Target height (for some modes) |
+
+**File Sources:**
+
+| Source | Description |
+|--------|-------------|
+| Use path field below | Enter file path manually |
+| Use job input files | Use files attached to job (from uploads or previous job) |
+| Use job input data | Get file path from previous job's output data |
 
 **Resize Modes:**
 
@@ -919,7 +956,7 @@ All tools output structured data accessible to downstream workflow events via `d
 | Passphrase Generator | `data.passphrases`, `data.entropy`, `data.strength` |
 | Lorem Ipsum Generator | `data.text`, `data.type`, `data.count` |
 | QR Code Generator | `data.filename`, `data.size`, `data.content` |
-| Barcode Generator | `data.file`, `data.type`, `data.text` |
+| Barcode Generator | `data.files`, `data.type`, `data.text` |
 | Fake Data Generator | `data.data`, `data.type`, `data.count` |
 | Base64 Encoder/Decoder | `data.output`, `data.mode` |
 | URL Encoder/Decoder | `data.output`, `data.mode` |
@@ -941,10 +978,6 @@ All tools include `data.tool` containing the tool name.
 ---
 
 ## Dependencies
-
-| Package | Version | Purpose | Runtime |
-|---------|---------|---------|--------|
-| `qrcode` | ^1.5.3 | QR code generation | Node.js only |
 
 The PowerShell implementation has no external dependencies and uses only .NET Framework classes.
 
@@ -977,6 +1010,26 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ---
 
 ## Version History
+
+### v2.3.0 (2026-02-16)
+- **Barcode Generator**: Now outputs both SVG and PNG formats with text label
+- **Fake Data Generator**: Added multi-country support (US, UK, Germany, France, Netherlands, Belgium, Spain, Italy)
+  - Country-specific names, addresses, phone formats, and postal codes
+  - Correct mobile number formats per country (e.g., Belgian mobiles start with +32 4XX)
+- **Fake Data Generator**: Added "Full Identity" data type generating complete fake profiles:
+  - Personal info: name, DOB, personal email, mobile, phone, full address
+  - Work info: company, job title, work email, work phone, work address
+- Barcode Generator now supports job input data as text source
+
+### v2.2.0 (2026-02-16)
+- Color Converter now generates a color swatch PNG preview image
+- Image Converter now supports multiple file sources:
+  - Direct file path input
+  - Job input files (from uploads or previous jobs)
+  - Job input data (file path from previous job's output)
+- Fixed Unicode emoji display issues (replaced with ASCII symbols)
+- Fixed table output array flattening in Token Generator and UUID Generator
+- Increased JSON Formatter output preview limit to 10KB
 
 ### v2.1.0 (2026-02-15)
 - Split network and healthcare tools into separate plugins:

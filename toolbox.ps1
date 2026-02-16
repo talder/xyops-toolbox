@@ -132,8 +132,12 @@ function Invoke-TokenGenerator {
   if ($includeNum)   { $charSets += 'numbers' }
   if ($includeSym)   { $charSets += 'symbols' }
 
-  # table for UI
-  Write-XY @{ table = @{ title='Generated Tokens'; header=@('#','Token'); rows = @($tokens | ForEach-Object -Begin { $n=0 } -Process { $n++; @($n, $_) }); caption = "Generated $count token(s) with length $length using: $([string]::Join(', ', $charSets))" } }
+  # table for UI - use unary comma to prevent array flattening
+  $rows = @()
+  for ($i = 0; $i -lt $tokens.Count; $i++) {
+    $rows += ,@(($i + 1), $tokens[$i])
+  }
+  Write-XY @{ table = @{ title='Generated Tokens'; header=@('#','Token'); rows=$rows; caption = "Generated $count token(s) with length $length using: $([string]::Join(', ', $charSets))" } }
 
   [pscustomobject]@{ tool = 'Token Generator'; tokens = $tokens; count = $count; length = $length; characterSets = $charSets }
 }
@@ -258,7 +262,12 @@ function Invoke-UUIDGenerator {
   $versionNames = @{ v1='v1 (Time-based)'; v4='v4 (Random)'; v6='v6 (Reordered Time-based)'; v7='v7 (Unix Epoch Time-based)'; nil='Nil (All zeros)'; max='Max (All ones)' }
   $formatNames  = @{ standard='Standard (lowercase)'; uppercase='Uppercase'; nodashes='No dashes'; urn='URN format' }
 
-  Write-XY @{ table = @{ title='Generated UUIDs'; header=@('#','UUID'); rows = @($uuids | ForEach-Object -Begin { $n=0 } -Process { $n++; @($n, $_) }); caption = "Generated $count $($versionNames[$version]) UUID(s) in $($formatNames[$format]) format" } }
+  # Build rows with unary comma to prevent array flattening
+  $rows = @()
+  for ($i = 0; $i -lt $uuids.Count; $i++) {
+    $rows += ,@(($i + 1), $uuids[$i])
+  }
+  Write-XY @{ table = @{ title='Generated UUIDs'; header=@('#','UUID'); rows=$rows; caption = "Generated $count $($versionNames[$version]) UUID(s) in $($formatNames[$format]) format" } }
 
   [pscustomobject]@{ tool='UUID Generator'; uuids=$uuids; count=$count; version=$version; versionName=$versionNames[$version]; format=$format; formatName=$formatNames[$format] }
 }
@@ -987,11 +996,11 @@ function Measure-Entropy {
 
 function Get-StrengthRating {
   param([int]$Entropy)
-  if ($Entropy -lt 40) { return @{ rating='Weak'; symbol='⚠️' } }
-  if ($Entropy -lt 60) { return @{ rating='Fair'; symbol='🔶' } }
-  if ($Entropy -lt 80) { return @{ rating='Strong'; symbol='🔷' } }
-  if ($Entropy -lt 100){ return @{ rating='Very Strong'; symbol='✅' } }
-  return @{ rating='Excellent'; symbol='🛡️' }
+  if ($Entropy -lt 40) { return @{ rating='Weak'; symbol='[!]' } }
+  if ($Entropy -lt 60) { return @{ rating='Fair'; symbol='[~]' } }
+  if ($Entropy -lt 80) { return @{ rating='Strong'; symbol='[+]' } }
+  if ($Entropy -lt 100){ return @{ rating='Very Strong'; symbol='[++]' } }
+  return @{ rating='Excellent'; symbol='[*]' }
 }
 
 function Invoke-PassphraseGenerator {
@@ -1074,9 +1083,9 @@ function Invoke-IBANValidator {
   $validation = Test-IBAN $iban
   Write-XYProgress 0.95 'Finalizing...'
   $table = if ($validation.valid) {
-    @{ title='IBAN Validation Result'; header=@('Property','Value'); rows=@(@('Status','✓ Valid IBAN'), @('Formatted',$validation.formatted), @('Country',"$($validation.countryName) ($($validation.countryCode))"), @('Check Digits',$validation.checkDigits), @('BBAN',$validation.bban), @('Length',"$($validation.length) characters")); caption='IBAN is valid and passes MOD-97 checksum verification' }
+    @{ title='IBAN Validation Result'; header=@('Property','Value'); rows=@(@('Status','[OK] Valid IBAN'), @('Formatted',$validation.formatted), @('Country',"$($validation.countryName) ($($validation.countryCode))"), @('Check Digits',$validation.checkDigits), @('BBAN',$validation.bban), @('Length',"$($validation.length) characters")); caption='IBAN is valid and passes MOD-97 checksum verification' }
   } else {
-    @{ title='IBAN Validation Result'; header=@('Property','Value'); rows=@(@('Status','✗ Invalid IBAN'), @('Input',$iban), @('Error',$validation.error)); caption='IBAN validation failed' }
+    @{ title='IBAN Validation Result'; header=@('Property','Value'); rows=@(@('Status','[X] Invalid IBAN'), @('Input',$iban), @('Error',$validation.error)); caption='IBAN validation failed' }
   }
   Write-XY @{ table = $table }
   $result = @{ tool='IBAN Validator'; input=$iban }
@@ -1343,12 +1352,13 @@ function Invoke-JsonFormatter {
   $modeNames = @{ prettify='Prettify'; minify='Minify'; validate='Validate' }
   
   if ($valid) {
-    $preview = if ($output.Length -gt 200) { $output.Substring(0,200) + '...' } else { $output }
-    Write-XY @{ table = @{ title='JSON Result'; header=@('Property','Value'); rows=@(@('Mode', $modeNames[$mode]), @('Valid', '✓ Yes'), @('Input Size', "$($text.Length) chars"), @('Output Size', "$($output.Length) chars")); caption='JSON is valid' } }
+    # Show full output for small results, truncate at 10KB for very large outputs
+    $preview = if ($output.Length -gt 10000) { $output.Substring(0,10000) + "`n... [truncated, full output in data]" } else { $output }
+    Write-XY @{ table = @{ title='JSON Result'; header=@('Property','Value'); rows=@(@('Mode', $modeNames[$mode]), @('Valid', '[OK] Yes'), @('Input Size', "$($text.Length) chars"), @('Output Size', "$($output.Length) chars")); caption='JSON is valid' } }
     Write-XY @{ text = @{ title='Output'; content=$preview; caption='' } }
     [pscustomobject]@{ tool='JSON Formatter'; mode=$mode; valid=$true; input=$text; output=$output; inputLength=$text.Length; outputLength=$output.Length }
   } else {
-    Write-XY @{ table = @{ title='JSON Result'; header=@('Property','Value'); rows=@(@('Mode', $modeNames[$mode]), @('Valid', '✗ No'), @('Error', $errorMsg)); caption='JSON is invalid' } }
+    Write-XY @{ table = @{ title='JSON Result'; header=@('Property','Value'); rows=@(@('Mode', $modeNames[$mode]), @('Valid', '[X] No'), @('Error', $errorMsg)); caption='JSON is invalid' } }
     [pscustomobject]@{ tool='JSON Formatter'; mode=$mode; valid=$false; error=$errorMsg }
   }
 }
@@ -1397,7 +1407,7 @@ function Invoke-CaseConverter {
 
 # ------------------------- Color Converter -------------------------
 function Invoke-ColorConverter {
-  param($Params, $JobInput)
+  param($Params, $JobInput, [string]$Cwd)
   Write-XYProgress 0.1 'Validating parameters...'
   $inputFormat = ($Params.colorInputFormat ?? 'hex')
   $source = ($Params.colorSource ?? 'field')
@@ -1476,25 +1486,79 @@ function Invoke-ColorConverter {
   }
   $hsl = "hsl($([Math]::Round($h)), $([Math]::Round($s * 100))%, $([Math]::Round($l * 100))%)"
   
+  Write-XYProgress 0.9 'Generating color swatch...'
+  
+  # Generate color swatch PNG
+  Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+  $swatchSize = 100
+  $swatch = New-Object System.Drawing.Bitmap($swatchSize, $swatchSize)
+  $graphics = [System.Drawing.Graphics]::FromImage($swatch)
+  $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($r, $g, $b))
+  $graphics.FillRectangle($brush, 0, 0, $swatchSize, $swatchSize)
+  # Add border
+  $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(200, 200, 200), 2)
+  $graphics.DrawRectangle($pen, 0, 0, $swatchSize - 1, $swatchSize - 1)
+  $brush.Dispose(); $pen.Dispose(); $graphics.Dispose()
+  
+  $filename = "color-swatch-$($hex.Replace('#', '')).png"
+  $filepath = Join-Path $Cwd $filename
+  $swatch.Save($filepath, [System.Drawing.Imaging.ImageFormat]::Png)
+  $swatch.Dispose()
+  
   Write-XYProgress 0.95 'Finalizing...'
   
+  Write-XY @{ files = @($filename) }
   Write-XY @{ table = @{ title='Color Conversion'; header=@('Format','Value'); rows=@(@('HEX', $hex), @('RGB', $rgb), @('HSL', $hsl), @('Red', $r), @('Green', $g), @('Blue', $b)); caption="Converted from $inputFormat" } }
-  [pscustomobject]@{ tool='Color Converter'; inputFormat=$inputFormat; input=$colorInput; hex=$hex; rgb=$rgb; hsl=$hsl; red=$r; green=$g; blue=$b }
+  [pscustomobject]@{ tool='Color Converter'; inputFormat=$inputFormat; input=$colorInput; hex=$hex; rgb=$rgb; hsl=$hsl; red=$r; green=$g; blue=$b; swatchFile=$filename }
 }
 
 # ------------------------- Image Converter -------------------------
 function Invoke-ImageConverter {
-  param($Params, [string]$Cwd)
+  param($Params, $JobInput, [string]$Cwd)
   Write-XYProgress 0.1 'Validating parameters...'
   
-  $inputFile = ($Params.imgInput ?? '')
+  $source = ($Params.imgSource ?? 'field')
   $outputFormat = ($Params.imgOutputFormat ?? 'png')
   $resize = ($Params.imgResize ?? 'none')
   $width = [int]($Params.imgWidth ?? 0)
   $height = [int]($Params.imgHeight ?? 0)
+  $inputFile = ''
+  
+  switch ($source) {
+    'files' {
+      # Get file from job input files array
+      $fileIndex = [int]($Params.imgFileIndex ?? 0)
+      if (-not $JobInput.files -or $JobInput.files.Count -eq 0) { throw 'No input files available from job' }
+      if ($fileIndex -ge $JobInput.files.Count) { throw "File index $fileIndex out of range ($($JobInput.files.Count) files available)" }
+      $fileObj = $JobInput.files[$fileIndex]
+      # File object has properties: id, date, filename, size, username - extract the filename
+      if ($fileObj -is [string]) {
+        $inputFile = $fileObj
+      } elseif ($fileObj.PSObject.Properties.Name -contains 'filename') {
+        $inputFile = $fileObj.filename
+      } else {
+        $inputFile = [string]$fileObj
+      }
+    }
+    'input' {
+      # Get file path from job input data
+      $inputData = $JobInput.data
+      if (-not $inputData) { throw 'No input data available from previous job' }
+      $dataPath = ($Params.imgDataPath ?? '')
+      $val = Get-NestedValue $inputData $dataPath
+      if ($null -eq $val) { throw "Data path '$dataPath' not found in input data" }
+      $inputFile = [string]$val
+    }
+    default {
+      # Use text field
+      $inputFile = ($Params.imgInput ?? '')
+    }
+  }
   
   if (-not $inputFile) { throw 'No input file specified' }
   
+  # Ensure inputFile is a string
+  $inputFile = [string]$inputFile
   $inputPath = if ([System.IO.Path]::IsPathRooted($inputFile)) { $inputFile } else { Join-Path $Cwd $inputFile }
   if (-not (Test-Path $inputPath)) { throw "Input file not found: $inputFile" }
   
@@ -1700,7 +1764,7 @@ function Invoke-CreditCardValidator {
   
   Write-XYProgress 0.95 'Finalizing...'
   
-  $validText = if ($isValid) { '✓ Valid (Luhn check passed)' } else { '✗ Invalid (Luhn check failed)' }
+  $validText = if ($isValid) { '[OK] Valid (Luhn check passed)' } else { '[X] Invalid (Luhn check failed)' }
   Write-XY @{ table = @{ title='Credit Card Validation'; header=@('Property','Value'); rows=@(@('Masked Number', $masked), @('Card Type', $cardType), @('Valid', $validText), @('Length', $len)); caption=$(if ($isValid) { 'Card number is valid' } else { 'Card number is invalid' }) } }
   [pscustomobject]@{ tool='Credit Card Validator'; maskedNumber=$masked; cardType=$cardType; valid=$isValid; length=$len }
 }
@@ -1757,7 +1821,7 @@ function Invoke-EmailValidator {
   
   Write-XYProgress 0.95 'Finalizing...'
   
-  $validText = if ($isValid) { '✓ Valid' } else { '✗ Invalid' }
+  $validText = if ($isValid) { '[OK] Valid' } else { '[X] Invalid' }
   $issueText = if ($issues.Count -gt 0) { $issues -join '; ' } else { 'None' }
   Write-XY @{ table = @{ title='Email Validation'; header=@('Property','Value'); rows=@(@('Email', $email), @('Valid', $validText), @('Local Part', $(if ($localPart) { $localPart } else { 'N/A' })), @('Domain', $(if ($domain) { $domain } else { 'N/A' })), @('TLD', $(if ($tld) { $tld } else { 'N/A' })), @('Issues', $issueText)); caption=$(if ($isValid) { 'Email address is valid' } else { 'Email address is invalid' }) } }
   [pscustomobject]@{ tool='Email Validator'; email=$email; valid=$isValid; localPart=$localPart; domain=$domain; tld=$tld; issues=$issues.ToArray() }
@@ -1766,11 +1830,21 @@ function Invoke-EmailValidator {
 
 # ------------------------- Barcode Generator -------------------------
 function Invoke-BarcodeGenerator {
-  param($Params, [string]$Cwd)
+  param($Params, $JobInput, [string]$Cwd)
   Write-XYProgress 0.1 'Validating parameters...'
   
   $barcodeType = ($Params.barcodeType ?? 'code128')
-  $text = ($Params.barcodeText ?? '')
+  $source = ($Params.barcodeSource ?? 'field')
+  $text = ''
+  
+  if ($source -eq 'input') {
+    $inputData = $JobInput.data
+    if (-not $inputData) { throw 'No input data available from previous job' }
+    $dataPath = ($Params.barcodeDataPath ?? '')
+    $val = Get-NestedValue $inputData $dataPath
+    if ($null -eq $val) { throw "Data path '$dataPath' not found in input data" }
+    $text = if ($val -is [string]) { $val } else { ($val | ConvertTo-Json -Compress -Depth 20) }
+  } else { $text = ($Params.barcodeText ?? '') }
   
   if (-not $text) { throw 'No barcode text provided' }
   
@@ -1877,16 +1951,59 @@ function Invoke-BarcodeGenerator {
     }
   }
   
-  Write-XYProgress 0.8 'Saving barcode...'
+  Write-XYProgress 0.7 'Saving SVG...'
   
-  $outputPath = Join-Path $Cwd $filename
-  $svg | Out-File -FilePath $outputPath -Encoding UTF8 -NoNewline
+  $svgFilename = "barcode-$barcodeType.svg"
+  $pngFilename = "barcode-$barcodeType.png"
+  $svgPath = Join-Path $Cwd $svgFilename
+  $pngPath = Join-Path $Cwd $pngFilename
+  
+  $svg | Out-File -FilePath $svgPath -Encoding UTF8 -NoNewline
+  
+  Write-XYProgress 0.85 'Generating PNG...'
+  
+  # Generate PNG using System.Drawing
+  Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+  $barWidth = 2
+  $height = 80
+  $margin = 10
+  $textHeight = 25
+  $imgWidth = $encoded.Length * $barWidth + ($margin * 2)
+  $imgHeight = $height + $margin + $textHeight
+  
+  $bitmap = New-Object System.Drawing.Bitmap($imgWidth, $imgHeight)
+  $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+  $graphics.Clear([System.Drawing.Color]::White)
+  
+  # Draw bars
+  $blackBrush = [System.Drawing.Brushes]::Black
+  $x = $margin
+  foreach ($bit in $encoded.ToCharArray()) {
+    if ($bit -eq '1') {
+      $graphics.FillRectangle($blackBrush, $x, $margin, $barWidth, $height)
+    }
+    $x += $barWidth
+  }
+  
+  # Draw text
+  $font = New-Object System.Drawing.Font('Consolas', 10)
+  $textBrush = [System.Drawing.Brushes]::Black
+  $displayText = if ($barcodeType -eq 'code39') { $text.ToUpper() } else { $text }
+  $textSize = $graphics.MeasureString($displayText, $font)
+  $textX = ($imgWidth - $textSize.Width) / 2
+  $textY = $margin + $height + 5
+  $graphics.DrawString($displayText, $font, $textBrush, $textX, $textY)
+  
+  $font.Dispose()
+  $graphics.Dispose()
+  $bitmap.Save($pngPath, [System.Drawing.Imaging.ImageFormat]::Png)
+  $bitmap.Dispose()
   
   Write-XYProgress 0.95 'Finalizing...'
   
-  Write-XY @{ files = @($filename) }
-  Write-XY @{ table = @{ title='Barcode Generated'; header=@('Property','Value'); rows=@(@('Type', $barcodeType.ToUpper()), @('Text', $text), @('File', $filename)); caption='Barcode generated as SVG' } }
-  [pscustomobject]@{ tool='Barcode Generator'; type=$barcodeType; text=$text; file=$filename }
+  Write-XY @{ files = @($svgFilename, $pngFilename) }
+  Write-XY @{ table = @{ title='Barcode Generated'; header=@('Property','Value'); rows=@(@('Type', $barcodeType.ToUpper()), @('Text', $text), @('SVG File', $svgFilename), @('PNG File', $pngFilename)); caption='Barcode generated as SVG and PNG' } }
+  [pscustomobject]@{ tool='Barcode Generator'; type=$barcodeType; text=$text; svgFile=$svgFilename; pngFile=$pngFilename; files=@($svgFilename, $pngFilename) }
 }
 
 # ------------------------- Fake Data Generator -------------------------
@@ -1895,23 +2012,144 @@ function Invoke-FakeDataGenerator {
   Write-XYProgress 0.1 'Validating parameters...'
   
   $dataType = ($Params.fakeDataType ?? 'person')
+  $country = ($Params.fakeCountry ?? 'us')
   $count = [int]($Params.fakeCount ?? 1)
   $count = [Math]::Max(1, [Math]::Min($count, 100))
   
-  Write-XYProgress 0.3 'Generating fake data...'
+  Write-XYProgress 0.2 'Loading country data...'
   
-  # Data pools
-  $firstNames = @('James','Mary','John','Patricia','Robert','Jennifer','Michael','Linda','David','Elizabeth','William','Barbara','Richard','Susan','Joseph','Jessica','Thomas','Sarah','Christopher','Karen','Charles','Lisa','Daniel','Nancy','Matthew','Betty','Anthony','Margaret','Mark','Sandra','Donald','Ashley','Steven','Kimberly','Paul','Emily','Andrew','Donna','Joshua','Michelle','Kenneth','Dorothy','Kevin','Carol','Brian','Amanda','George','Melissa','Timothy','Deborah')
-  $lastNames = @('Smith','Johnson','Williams','Brown','Jones','Garcia','Miller','Davis','Rodriguez','Martinez','Hernandez','Lopez','Gonzalez','Wilson','Anderson','Thomas','Taylor','Moore','Jackson','Martin','Lee','Perez','Thompson','White','Harris','Sanchez','Clark','Ramirez','Lewis','Robinson','Walker','Young','Allen','King','Wright','Scott','Torres','Nguyen','Hill','Flores')
-  $domains = @('gmail.com','yahoo.com','hotmail.com','outlook.com','icloud.com','mail.com','proton.me','example.com','company.org')
-  $streets = @('Main St','Oak Ave','Maple Dr','Cedar Ln','Pine Rd','Elm St','Park Ave','Lake Dr','Hill Rd','River Rd','Forest Ave','Valley Dr','Sunset Blvd','Ocean Ave','Mountain Rd')
-  $cities = @('New York','Los Angeles','Chicago','Houston','Phoenix','Philadelphia','San Antonio','San Diego','Dallas','San Jose','Austin','Jacksonville','Fort Worth','Columbus','Charlotte','Seattle','Denver','Boston','Portland','Miami')
-  $states = @('NY','CA','IL','TX','AZ','PA','FL','OH','NC','WA','CO','MA','OR','GA','MI','NJ','VA','TN','MO','MD')
-  $companies = @('Acme Corp','Global Tech','Innovative Solutions','Digital Dynamics','Future Systems','Prime Industries','Elite Services','Apex Group','Pinnacle Inc','Quantum Labs')
+  # Country-specific data pools
+  $countryData = @{
+    'us' = @{
+      countryName = 'United States'
+      countryCode = 'US'
+      firstNames = @('James','Mary','John','Patricia','Robert','Jennifer','Michael','Linda','David','Elizabeth','William','Barbara','Richard','Susan','Joseph','Jessica','Thomas','Sarah','Christopher','Karen','Charles','Lisa','Daniel','Nancy','Matthew','Betty','Anthony','Margaret','Mark','Sandra')
+      lastNames = @('Smith','Johnson','Williams','Brown','Jones','Garcia','Miller','Davis','Rodriguez','Martinez','Wilson','Anderson','Thomas','Taylor','Moore','Jackson','Martin','Lee','Thompson','White','Harris','Clark','Lewis','Robinson','Walker','Young','Allen','King','Wright','Scott')
+      streets = @('Main St','Oak Ave','Maple Dr','Cedar Ln','Pine Rd','Elm St','Park Ave','Lake Dr','Hill Rd','River Rd','Forest Ave','Valley Dr','Sunset Blvd','Ocean Ave','Mountain Rd')
+      cities = @('New York','Los Angeles','Chicago','Houston','Phoenix','Philadelphia','San Antonio','San Diego','Dallas','Austin','Seattle','Denver','Boston','Miami','Atlanta')
+      regions = @('NY','CA','IL','TX','AZ','PA','FL','OH','NC','WA','CO','MA','GA','MI','NJ')
+      regionLabel = 'State'
+      postalFormat = { '{0:D5}' -f ((Get-Random -Maximum 90000) + 10000) }
+      phoneFormat = { '+1 ({0:D3}) {1:D3}-{2:D4}' -f ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 9000)+1000) }
+      mobileFormat = { '+1 ({0:D3}) {1:D3}-{2:D4}' -f ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 9000)+1000) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$num $street, $city, $region $postal" }
+      companies = @('Acme Corp','Global Tech','Innovative Solutions','Digital Dynamics','Future Systems','Prime Industries','Elite Services','Apex Group','Pinnacle Inc','Quantum Labs')
+    }
+    'uk' = @{
+      countryName = 'United Kingdom'
+      countryCode = 'GB'
+      firstNames = @('Oliver','Olivia','George','Amelia','Harry','Isla','Noah','Ava','Jack','Emily','Leo','Mia','Charlie','Grace','Oscar','Lily','Henry','Sophie','William','Ella','Thomas','Freya','James','Charlotte','Jacob','Ivy','Arthur','Daisy','Alfie','Poppy')
+      lastNames = @('Smith','Jones','Williams','Taylor','Brown','Davies','Evans','Wilson','Thomas','Roberts','Johnson','Lewis','Walker','Robinson','Wood','Thompson','White','Watson','Jackson','Wright','Green','Harris','Cooper','King','Lee','Martin','Clarke','James','Morgan','Hughes')
+      streets = @('High Street','Church Lane','Station Road','Mill Lane','The Green','Park Road','Victoria Road','Manor Road','Queens Road','Kings Road','London Road','Bridge Street','Market Street','Chapel Lane','School Lane')
+      cities = @('London','Birmingham','Manchester','Leeds','Liverpool','Sheffield','Bristol','Newcastle','Nottingham','Southampton','Edinburgh','Glasgow','Cardiff','Belfast','Cambridge','Oxford','Brighton','Bath')
+      regions = @('Greater London','West Midlands','Greater Manchester','West Yorkshire','Merseyside','South Yorkshire','Avon','Tyne and Wear','Nottinghamshire','Hampshire','Lothian','Strathclyde','South Glamorgan','Antrim','Cambridgeshire')
+      regionLabel = 'County'
+      postalFormat = { $letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'; "$($letters[(Get-Random -Maximum 26)])$($letters[(Get-Random -Maximum 26)])$((Get-Random -Maximum 9)+1) $((Get-Random -Maximum 9)+1)$($letters[(Get-Random -Maximum 26)])$($letters[(Get-Random -Maximum 26)])" }
+      phoneFormat = { '+44 {0:D4} {1:D6}' -f ((Get-Random -Maximum 9000)+1000), ((Get-Random -Maximum 900000)+100000) }
+      mobileFormat = { '+44 7{0:D3} {1:D6}' -f ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 900000)+100000) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$num $street`n$city`n$postal" }
+      companies = @('British Solutions Ltd','Crown Industries','Royal Tech','Empire Group','Commonwealth Corp','Sterling Services','Albion Partners','Thames Digital','Windsor Holdings','Cambridge Innovations')
+    }
+    'de' = @{
+      countryName = 'Germany'
+      countryCode = 'DE'
+      firstNames = @('Lukas','Emma','Leon','Mia','Paul','Hannah','Felix','Sophia','Maximilian','Marie','Jonas','Emilia','Ben','Lina','Elias','Anna','Noah','Lea','Luis','Clara','Tim','Laura','Finn','Lena','Julian','Sarah','Niklas','Julia','Moritz','Amelie')
+      lastNames = @('Mueller','Schmidt','Schneider','Fischer','Weber','Meyer','Wagner','Becker','Schulz','Hoffmann','Schaefer','Koch','Bauer','Richter','Klein','Wolf','Schroeder','Neumann','Schwarz','Zimmermann','Braun','Krueger','Hofmann','Hartmann','Lange','Schmitt','Werner','Krause','Meier','Lehmann')
+      streets = @('Hauptstrasse','Bahnhofstrasse','Schulstrasse','Gartenstrasse','Dorfstrasse','Bergstrasse','Kirchstrasse','Waldstrasse','Ringstrasse','Muehlenweg','Lindenstrasse','Rosenweg','Birkenweg','Ahornweg','Eichenstrasse')
+      cities = @('Berlin','Hamburg','Munich','Cologne','Frankfurt','Stuttgart','Dusseldorf','Leipzig','Dortmund','Essen','Bremen','Dresden','Hanover','Nuremberg','Duisburg')
+      regions = @('Berlin','Hamburg','Bavaria','North Rhine-Westphalia','Hesse','Baden-Wuerttemberg','Lower Saxony','Saxony','Rhineland-Palatinate','Schleswig-Holstein','Brandenburg','Saxony-Anhalt','Thuringia','Mecklenburg-Vorpommern','Saarland')
+      regionLabel = 'Bundesland'
+      postalFormat = { '{0:D5}' -f ((Get-Random -Maximum 90000) + 10000) }
+      phoneFormat = { '+49 {0:D3} {1:D7}' -f ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 9000000)+1000000) }
+      mobileFormat = { $prefix = @('151','152','157','160','170','171','172','173','174','175','176','177','178','179')[(Get-Random -Maximum 14)]; '+49 {0} {1:D7}' -f $prefix, ((Get-Random -Maximum 9000000)+1000000) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$street $num`n$postal $city" }
+      companies = @('Deutsche Technik GmbH','Berliner Solutions','Rhein Industries AG','Alpen Group','Schwarzwald Digital','Bayern Systems','Hamburg Innovations','Muenchen Partners','Dresden Tech','Leipzig Consulting')
+    }
+    'fr' = @{
+      countryName = 'France'
+      countryCode = 'FR'
+      firstNames = @('Gabriel','Emma','Louis','Jade','Raphael','Louise','Leo','Alice','Adam','Chloe','Lucas','Lina','Hugo','Rose','Jules','Lea','Arthur','Anna','Nathan','Mila','Liam','Amelia','Ethan','Manon','Paul','Juliette','Noah','Camille','Tom','Ines')
+      lastNames = @('Martin','Bernard','Dubois','Thomas','Robert','Richard','Petit','Durand','Leroy','Moreau','Simon','Laurent','Lefebvre','Michel','Garcia','David','Bertrand','Roux','Vincent','Fournier','Morel','Girard','Andre','Lefevre','Mercier','Dupont','Lambert','Bonnet','Francois','Martinez')
+      streets = @('Rue de la Paix','Avenue des Champs','Boulevard Saint-Michel','Rue du Commerce','Place de la Republique','Rue Victor Hugo','Avenue de la Gare','Rue Pasteur','Boulevard Voltaire','Rue Jean Jaures','Rue de la Liberte','Avenue Gambetta','Rue du Moulin','Place du Marche','Rue des Fleurs')
+      cities = @('Paris','Marseille','Lyon','Toulouse','Nice','Nantes','Strasbourg','Montpellier','Bordeaux','Lille','Rennes','Reims','Toulon','Grenoble','Dijon')
+      regions = @('Ile-de-France','Provence-Alpes-Cote d Azur','Auvergne-Rhone-Alpes','Occitanie','Hauts-de-France','Nouvelle-Aquitaine','Grand Est','Pays de la Loire','Bretagne','Normandie','Bourgogne-Franche-Comte','Centre-Val de Loire','Corse')
+      regionLabel = 'Region'
+      postalFormat = { '{0:D5}' -f ((Get-Random -Maximum 90000) + 10000) }
+      phoneFormat = { '+33 {0:D1} {1:D2} {2:D2} {3:D2} {4:D2}' -f ((Get-Random -Maximum 4)+1), (Get-Random -Maximum 100), (Get-Random -Maximum 100), (Get-Random -Maximum 100), (Get-Random -Maximum 100) }
+      mobileFormat = { $prefix = @(6,7)[(Get-Random -Maximum 2)]; '+33 {0} {1:D2} {2:D2} {3:D2} {4:D2}' -f $prefix, (Get-Random -Maximum 100), (Get-Random -Maximum 100), (Get-Random -Maximum 100), (Get-Random -Maximum 100) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$num $street`n$postal $city" }
+      companies = @('Solutions Francaises SA','Paris Tech','Groupe Lyonnais','Bordeaux Industries','Marseille Digital','Toulouse Innovations','Nice Services','Nantes Partners','Strasbourg Consulting','Lyon Systems')
+    }
+    'nl' = @{
+      countryName = 'Netherlands'
+      countryCode = 'NL'
+      firstNames = @('Daan','Emma','Sem','Julia','Lucas','Tess','Levi','Sophie','Finn','Evi','Noah','Anna','Luuk','Saar','Milan','Lotte','Jesse','Noor','Bram','Fleur','Jayden','Mila','Tim','Sara','Lars','Isa','Thijs','Zoey','Ruben','Lieke')
+      lastNames = @('De Jong','Jansen','De Vries','Van den Berg','Van Dijk','Bakker','Janssen','Visser','Smit','Meijer','De Boer','Mulder','De Groot','Bos','Vos','Peters','Hendriks','Van Leeuwen','Dekker','Brouwer','De Wit','Dijkstra','Smits','De Graaf','Van der Meer')
+      streets = @('Hoofdstraat','Kerkstraat','Dorpsstraat','Stationsweg','Molenweg','Schoolstraat','Julianastraat','Beatrixstraat','Marktplein','Nieuwstraat','Oranjestraat','Wilhelminastraat','Raadhuisstraat','Gravenstraat','Havenstraat')
+      cities = @('Amsterdam','Rotterdam','The Hague','Utrecht','Eindhoven','Groningen','Tilburg','Almere','Breda','Nijmegen','Apeldoorn','Haarlem','Arnhem','Enschede','Amersfoort')
+      regions = @('North Holland','South Holland','Utrecht','North Brabant','Gelderland','Overijssel','Limburg','Friesland','Groningen','Drenthe','Flevoland','Zeeland')
+      regionLabel = 'Province'
+      postalFormat = { $letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'; '{0:D4} {1}{2}' -f ((Get-Random -Maximum 9000)+1000), $letters[(Get-Random -Maximum 26)], $letters[(Get-Random -Maximum 26)] }
+      phoneFormat = { '+31 {0:D2} {1:D3} {2:D4}' -f ((Get-Random -Maximum 90)+10), ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 9000)+1000) }
+      mobileFormat = { '+31 6 {0:D8}' -f ((Get-Random -Maximum 90000000)+10000000) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$street $num`n$postal $city" }
+      companies = @('Dutch Solutions BV','Amsterdam Tech','Rotterdam Industries','Utrecht Digital','Eindhoven Innovations','Holland Group','Nederlandse Partners','Tulip Systems','Oranje Consulting','Windmill Corp')
+    }
+    'be' = @{
+      countryName = 'Belgium'
+      countryCode = 'BE'
+      firstNames = @('Noah','Emma','Liam','Louise','Lucas','Marie','Louis','Olivia','Adam','Elise','Arthur','Anna','Jules','Charlotte','Victor','Juliette','Nathan','Camille','Mathis','Lea','Rayan','Lina','Mohamed','Elena','Aaron','Noor','Maxime','Julie','Tom','Laura')
+      lastNames = @('Peeters','Janssens','Maes','Jacobs','Mertens','Willems','Claes','Goossens','Wouters','De Smedt','Dubois','Lambert','Martin','Dupont','Simon','Laurent','Leroy','Claessens','Hermans','Van den Berg','Michiels','Leclercq','Desmet','De Backer','Hendrickx')
+      streets = @('Kerkstraat','Stationsstraat','Schoolstraat','Nieuwstraat','Molenstraat','Hoogstraat','Dorpsstraat','Groenstraat','Kapelstraat','Beekstraat','Rue de la Station','Rue du Moulin','Grand Place','Rue Haute','Chaussee de Bruxelles')
+      cities = @('Brussels','Antwerp','Ghent','Charleroi','Liege','Bruges','Namur','Leuven','Mons','Mechelen','Aalst','La Louviere','Kortrijk','Hasselt','Ostend')
+      regions = @('Brussels Capital','Antwerp','East Flanders','Hainaut','Liege','West Flanders','Namur','Flemish Brabant','Limbourg','Walloon Brabant','Luxembourg')
+      regionLabel = 'Province'
+      postalFormat = { '{0:D4}' -f ((Get-Random -Maximum 9000) + 1000) }
+      phoneFormat = { '+32 {0:D1} {1:D3} {2:D2} {3:D2}' -f ((Get-Random -Maximum 8)+2), ((Get-Random -Maximum 900)+100), (Get-Random -Maximum 100), (Get-Random -Maximum 100) }
+      mobileFormat = { $prefix = @('470','471','472','473','474','475','476','477','478','479','484','485','486','487','488','489','490','491','492','493','494','495','496','497','498','499')[(Get-Random -Maximum 26)]; '+32 {0} {1:D2} {2:D2} {3:D2}' -f $prefix, (Get-Random -Maximum 100), (Get-Random -Maximum 100), (Get-Random -Maximum 100) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$street $num`n$postal $city" }
+      companies = @('Belgian Solutions NV','Brussels Tech','Antwerp Industries','Ghent Digital','Flemish Group','Wallonia Partners','Benelux Corp','Leuven Innovations','Bruges Consulting','Liege Systems')
+    }
+    'es' = @{
+      countryName = 'Spain'
+      countryCode = 'ES'
+      firstNames = @('Hugo','Lucia','Martin','Sofia','Lucas','Maria','Mateo','Martina','Leo','Paula','Daniel','Valeria','Pablo','Emma','Alejandro','Julia','Manuel','Daniela','Adrian','Alba','Alvaro','Carla','David','Sara','Diego','Noa','Mario','Carmen','Iker','Elena')
+      lastNames = @('Garcia','Rodriguez','Martinez','Lopez','Gonzalez','Hernandez','Perez','Sanchez','Ramirez','Torres','Flores','Rivera','Gomez','Diaz','Reyes','Morales','Jimenez','Ruiz','Alvarez','Romero','Navarro','Dominguez','Vazquez','Ramos','Gil','Serrano','Blanco','Molina','Moreno','Ortiz')
+      streets = @('Calle Mayor','Avenida de la Constitucion','Paseo del Prado','Calle Real','Plaza Mayor','Calle del Sol','Avenida de la Libertad','Calle de la Paz','Rambla de Catalunya','Gran Via','Calle Nueva','Paseo Maritimo','Calle del Carmen','Avenida del Mar','Calle San Antonio')
+      cities = @('Madrid','Barcelona','Valencia','Seville','Zaragoza','Malaga','Murcia','Palma','Las Palmas','Bilbao','Alicante','Cordoba','Valladolid','Vigo','Gijon')
+      regions = @('Community of Madrid','Catalonia','Valencian Community','Andalusia','Aragon','Balearic Islands','Canary Islands','Basque Country','Galicia','Castile and Leon','Castile-La Mancha','Region of Murcia','Navarre','Asturias','Cantabria')
+      regionLabel = 'Autonomous Community'
+      postalFormat = { '{0:D5}' -f ((Get-Random -Maximum 53000) + 1000) }
+      phoneFormat = { '+34 9{0:D2} {1:D3} {2:D3}' -f ((Get-Random -Maximum 90)+10), ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 900)+100) }
+      mobileFormat = { $prefix = @(6,7)[(Get-Random -Maximum 2)]; '+34 {0}{1:D2} {2:D3} {3:D3}' -f $prefix, ((Get-Random -Maximum 90)+10), ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 900)+100) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$street, $num`n$postal $city" }
+      companies = @('Soluciones Espanolas SL','Madrid Tech','Barcelona Industries','Valencia Digital','Iberia Group','Costa Partners','Hispania Corp','Sevilla Innovations','Mediterraneo Consulting','Pirineos Systems')
+    }
+    'it' = @{
+      countryName = 'Italy'
+      countryCode = 'IT'
+      firstNames = @('Leonardo','Sofia','Francesco','Aurora','Alessandro','Giulia','Lorenzo','Ginevra','Mattia','Alice','Andrea','Emma','Gabriele','Giorgia','Riccardo','Beatrice','Tommaso','Chiara','Edoardo','Anna','Federico','Sara','Luca','Greta','Marco','Martina','Davide','Ludovica','Giuseppe','Francesca')
+      lastNames = @('Rossi','Russo','Ferrari','Esposito','Bianchi','Romano','Colombo','Ricci','Marino','Greco','Bruno','Gallo','Conti','De Luca','Costa','Giordano','Mancini','Rizzo','Lombardi','Moretti','Barbieri','Fontana','Santoro','Mariani','Rinaldi','Caruso','Ferrara','Galli','Martini','Leone')
+      streets = @('Via Roma','Corso Italia','Via Garibaldi','Via Dante','Piazza del Duomo','Via Mazzini','Via Vittorio Emanuele','Via Nazionale','Via della Repubblica','Via Verdi','Corso Vittorio Emanuele','Via Cavour','Via XX Settembre','Via dei Mille','Piazza della Liberta')
+      cities = @('Rome','Milan','Naples','Turin','Palermo','Genoa','Bologna','Florence','Bari','Catania','Venice','Verona','Messina','Padua','Trieste')
+      regions = @('Lazio','Lombardy','Campania','Piedmont','Sicily','Liguria','Emilia-Romagna','Tuscany','Apulia','Veneto','Friuli Venezia Giulia','Sardinia','Calabria','Marche','Abruzzo')
+      regionLabel = 'Region'
+      postalFormat = { '{0:D5}' -f ((Get-Random -Maximum 99000) + 1000) }
+      phoneFormat = { '+39 0{0:D1} {1:D4} {2:D4}' -f ((Get-Random -Maximum 9)+1), ((Get-Random -Maximum 9000)+1000), ((Get-Random -Maximum 9000)+1000) }
+      mobileFormat = { $prefix = @('320','321','322','323','324','325','326','327','328','329','330','331','333','334','335','336','337','338','339','340','341','342','343','344','345','346','347','348','349','350','351','360','361','362','363','364','365','366','368','370','371','373','377','388','389','390','391','392','393')[(Get-Random -Maximum 49)]; '+39 {0} {1:D3} {2:D4}' -f $prefix, ((Get-Random -Maximum 900)+100), ((Get-Random -Maximum 9000)+1000) }
+      addressFormat = { param($num,$street,$city,$region,$postal) "$street, $num`n$postal $city" }
+      companies = @('Soluzioni Italiane SRL','Roma Tech','Milano Industries','Firenze Digital','Italia Group','Venezia Partners','Napoli Corp','Torino Innovations','Sicilia Consulting','Lombarda Systems')
+    }
+  }
+  
+  # Get country-specific data or default to US
+  $cd = $countryData[$country] ?? $countryData['us']
+  
+  # Common data
+  $domains = @('gmail.com','yahoo.com','hotmail.com','outlook.com','icloud.com','mail.com','proton.me')
   $jobTitles = @('Software Engineer','Product Manager','Data Analyst','Marketing Director','Sales Representative','HR Manager','Financial Analyst','Operations Manager','Project Coordinator','UX Designer')
   
-  # Use Get-Random for reliability (avoids array output issues with scriptblocks)
-  $randomInt = { param([int]$max) return [int](Get-Random -Maximum $max) }
+  Write-XYProgress 0.3 "Generating $($cd.countryName) data..."
   
   $results = [System.Collections.Generic.List[object]]::new()
   $rows = [System.Collections.Generic.List[object]]::new()
@@ -1919,31 +2157,70 @@ function Invoke-FakeDataGenerator {
   for ($i = 0; $i -lt $count; $i++) {
     Write-XYProgress (0.3 + 0.6 * ($i / $count)) "Generating record $($i + 1) of $count..."
     
-    $firstName = $firstNames[(& $randomInt $firstNames.Count)]
-    $lastName = $lastNames[(& $randomInt $lastNames.Count)]
+    $firstName = $cd.firstNames[(Get-Random -Maximum $cd.firstNames.Count)]
+    $lastName = $cd.lastNames[(Get-Random -Maximum $cd.lastNames.Count)]
     $fullName = "$firstName $lastName"
-    $email = "$($firstName.ToLower()).$($lastName.ToLower())@$($domains[(& $randomInt $domains.Count)])"
-    $phone = "+1 ($((& $randomInt 900) + 100)) $((& $randomInt 900) + 100)-$((& $randomInt 9000) + 1000)"
-    $streetNum = (& $randomInt 9999) + 1
-    $street = $streets[(& $randomInt $streets.Count)]
-    $city = $cities[(& $randomInt $cities.Count)]
-    $state = $states[(& $randomInt $states.Count)]
-    $zip = '{0:D5}' -f ((& $randomInt 90000) + 10000)
-    $address = "$streetNum $street, $city, $state $zip"
-    $company = $companies[(& $randomInt $companies.Count)]
-    $jobTitle = $jobTitles[(& $randomInt $jobTitles.Count)]
-    [int]$age = [int](& $randomInt 50) + 18
+    $email = "$($firstName.ToLower()).$($lastName.ToLower().Replace(' ',''))@$($domains[(Get-Random -Maximum $domains.Count)])"
+    $phone = & $cd.phoneFormat
+    $streetNum = (Get-Random -Maximum 299) + 1
+    $street = $cd.streets[(Get-Random -Maximum $cd.streets.Count)]
+    $city = $cd.cities[(Get-Random -Maximum $cd.cities.Count)]
+    $region = $cd.regions[(Get-Random -Maximum $cd.regions.Count)]
+    $postal = & $cd.postalFormat
+    $address = & $cd.addressFormat $streetNum $street $city $region $postal
+    $company = $cd.companies[(Get-Random -Maximum $cd.companies.Count)]
+    $jobTitle = $jobTitles[(Get-Random -Maximum $jobTitles.Count)]
     [int]$birthYear = 1958 + (Get-Random -Maximum 51)
     [int]$birthMonth = 1 + (Get-Random -Maximum 12)
     [int]$birthDay = 1 + (Get-Random -Maximum 28)
     $dob = '{0:D4}-{1:D2}-{2:D2}' -f $birthYear, $birthMonth, $birthDay
     
+    # Generate additional data for identity type
+    $mobile = & $cd.mobileFormat
+    $workPhone = & $cd.phoneFormat
+    $personalEmail = "$($firstName.ToLower()).$($lastName.ToLower().Replace(' ',''))@$($domains[(Get-Random -Maximum $domains.Count)])"
+    $companyDomain = ($company.ToLower() -replace '[^a-z0-9]','') + '.com'
+    $workEmail = "$($firstName.ToLower()).$($lastName.ToLower().Replace(' ',''))@$companyDomain"
+    $workStreetNum = (Get-Random -Maximum 299) + 1
+    $workStreet = $cd.streets[(Get-Random -Maximum $cd.streets.Count)]
+    $workCity = $cd.cities[(Get-Random -Maximum $cd.cities.Count)]
+    $workRegion = $cd.regions[(Get-Random -Maximum $cd.regions.Count)]
+    $workPostal = & $cd.postalFormat
+    $workAddress = & $cd.addressFormat $workStreetNum $workStreet $workCity $workRegion $workPostal
+    
     $record = switch ($dataType) {
-      'person' { [pscustomobject]@{ name=$fullName; email=$email; phone=$phone; address=$address; dob=$dob } }
-      'contact' { [pscustomobject]@{ firstName=$firstName; lastName=$lastName; email=$email; phone=$phone } }
-      'address' { [pscustomobject]@{ street="$streetNum $street"; city=$city; state=$state; zip=$zip; country='USA' } }
-      'company' { [pscustomobject]@{ company=$company; contact=$fullName; email=$email; phone=$phone } }
-      'employee' { [pscustomobject]@{ name=$fullName; email=$email; jobTitle=$jobTitle; company=$company; phone=$phone } }
+      'person' { [pscustomobject]@{ name=$fullName; email=$email; phone=$phone; address=$address; dob=$dob; country=$cd.countryCode } }
+      'contact' { [pscustomobject]@{ firstName=$firstName; lastName=$lastName; email=$email; phone=$phone; country=$cd.countryCode } }
+      'address' { [pscustomobject]@{ street="$street $streetNum"; city=$city; region=$region; postalCode=$postal; country=$cd.countryName; countryCode=$cd.countryCode } }
+      'company' { [pscustomobject]@{ company=$company; contact=$fullName; email=$email; phone=$phone; country=$cd.countryCode } }
+      'employee' { [pscustomobject]@{ name=$fullName; email=$email; jobTitle=$jobTitle; company=$company; phone=$phone; country=$cd.countryCode } }
+      'identity' { 
+        [pscustomobject]@{ 
+          firstName = $firstName
+          lastName = $lastName
+          fullName = $fullName
+          dateOfBirth = $dob
+          personalEmail = $personalEmail
+          mobile = $mobile
+          phone = $phone
+          address = $address
+          street = "$street $streetNum"
+          city = $city
+          region = $region
+          postalCode = $postal
+          country = $cd.countryName
+          countryCode = $cd.countryCode
+          company = $company
+          jobTitle = $jobTitle
+          workEmail = $workEmail
+          workPhone = $workPhone
+          workAddress = $workAddress
+          workStreet = "$workStreet $workStreetNum"
+          workCity = $workCity
+          workRegion = $workRegion
+          workPostalCode = $workPostal
+        } 
+      }
     }
     $results.Add($record)
     
@@ -1951,9 +2228,10 @@ function Invoke-FakeDataGenerator {
       $rowData = switch ($dataType) {
         'person' { @(($i+1), $fullName, $email, $phone) }
         'contact' { @(($i+1), $firstName, $lastName, $email) }
-        'address' { @(($i+1), "$streetNum $street", $city, "$state $zip") }
+        'address' { @(($i+1), "$street $streetNum", $city, $postal) }
         'company' { @(($i+1), $company, $fullName, $email) }
         'employee' { @(($i+1), $fullName, $jobTitle, $company) }
+        'identity' { @(($i+1), $fullName, $personalEmail, $company) }
       }
       $rows.Add($rowData)
     }
@@ -1964,18 +2242,19 @@ function Invoke-FakeDataGenerator {
   $headers = switch ($dataType) {
     'person' { @('#','Name','Email','Phone') }
     'contact' { @('#','First Name','Last Name','Email') }
-    'address' { @('#','Street','City','State/Zip') }
+    'address' { @('#','Street','City','Postal Code') }
     'company' { @('#','Company','Contact','Email') }
     'employee' { @('#','Name','Job Title','Company') }
+    'identity' { @('#','Name','Personal Email','Company') }
   }
-  $typeNames = @{ person='Person'; contact='Contact'; address='Address'; company='Company'; employee='Employee' }
+  $typeNames = @{ person='Person'; contact='Contact'; address='Address'; company='Company'; employee='Employee'; identity='Full Identity' }
   
   if ($count -le 10) {
-    Write-XY @{ table = @{ title="Fake $($typeNames[$dataType]) Data"; header=$headers; rows=$rows.ToArray(); caption="Generated $count record(s)" } }
+    Write-XY @{ table = @{ title="Fake $($typeNames[$dataType]) Data ($($cd.countryName))"; header=$headers; rows=$rows.ToArray(); caption="Generated $count record(s)" } }
   } else {
-    Write-XY @{ table = @{ title="Fake $($typeNames[$dataType]) Data"; header=@('Property','Value'); rows=@(@('Type', $typeNames[$dataType]), @('Count', $count), @('Sample', $results[0].name ?? $results[0].company ?? $results[0].street)); caption="Generated $count records (data in output)" } }
+    Write-XY @{ table = @{ title="Fake $($typeNames[$dataType]) Data ($($cd.countryName))"; header=@('Property','Value'); rows=@(@('Type', $typeNames[$dataType]), @('Country', $cd.countryName), @('Count', $count), @('Sample', $results[0].name ?? $results[0].company ?? $results[0].street)); caption="Generated $count records (data in output)" } }
   }
-  [pscustomobject]@{ tool='Fake Data Generator'; type=$dataType; count=$count; data=$results.ToArray() }
+  [pscustomobject]@{ tool='Fake Data Generator'; type=$dataType; country=$cd.countryCode; countryName=$cd.countryName; count=$count; data=$results.ToArray() }
 }
 
 # ------------------------- Syntax Validator
@@ -2525,13 +2804,13 @@ try {
     'timestamp'      { $result = Invoke-TimestampConverter -Params $params -JobInput $jobInput }
     'jsonFormatter'  { $result = Invoke-JsonFormatter -Params $params -JobInput $jobInput }
     'caseConverter'  { $result = Invoke-CaseConverter -Params $params -JobInput $jobInput }
-    'colorConverter' { $result = Invoke-ColorConverter -Params $params -JobInput $jobInput }
-    'imageConverter' { $result = Invoke-ImageConverter -Params $params -Cwd $cwd }
+    'colorConverter' { $result = Invoke-ColorConverter -Params $params -JobInput $jobInput -Cwd $cwd }
+    'imageConverter' { $result = Invoke-ImageConverter -Params $params -JobInput $jobInput -Cwd $cwd }
     'slugGenerator'  { $result = Invoke-SlugGenerator -Params $params -JobInput $jobInput }
     'textStatistics' { $result = Invoke-TextStatistics -Params $params -JobInput $jobInput }
     'creditCardValidator' { $result = Invoke-CreditCardValidator -Params $params -JobInput $jobInput }
     'emailValidator' { $result = Invoke-EmailValidator -Params $params -JobInput $jobInput }
-    'barcodeGenerator' { $result = Invoke-BarcodeGenerator -Params $params -Cwd $cwd }
+    'barcodeGenerator' { $result = Invoke-BarcodeGenerator -Params $params -JobInput $jobInput -Cwd $cwd }
     'fakeDataGenerator' { $result = Invoke-FakeDataGenerator -Params $params }
     'syntaxValidator' { $result = Invoke-SyntaxValidator -Params $params -JobInput $jobInput -Cwd $cwd }
     default          { throw "Unknown tool: $tool" }
